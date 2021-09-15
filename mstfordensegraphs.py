@@ -4,6 +4,7 @@ from datetime import datetime
 
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.spatial
 import sklearn
 
 from sklearn import cluster, datasets, mixture
@@ -13,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 from itertools import cycle, islice
 
 from pyspark import RDD, SparkConf, SparkContext
-from scipy.spatial import distance
+from scipy.spatial import distance, distance_matrix
 
 
 def data_reading():
@@ -86,6 +87,16 @@ def get_clustering_data():
     return datasets
 
 
+def create_distance_matrix(dataset):
+    x = []
+    y = []
+    for line in dataset[1]:
+        x.append([line[0]])
+        y.append([line[1]])
+    d_matrix = scipy.spatial.distance_matrix(x, y, p=2, threshold=1000000)
+    return d_matrix
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('--test', help="Used for smaller dataset and testing", action="store_true")
@@ -106,7 +117,9 @@ def main():
     # create_mst()
     datasets = get_clustering_data()
 
-    print(datasets[1])
+    for dataset in datasets:
+        create_distance_matrix(dataset)
+
 
 if __name__ == '__main__':
     main()
