@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 from datetime import datetime
 
 import numpy as np
+import random
 import matplotlib.pyplot as plt
 import scipy.spatial
 import sklearn
@@ -14,27 +15,9 @@ from sklearn.preprocessing import StandardScaler
 from itertools import cycle, islice
 
 from pyspark import RDD, SparkConf, SparkContext
-from scipy.spatial import distance, distance_matrix
 
 
-def data_reading():
-    pass
-
-
-def reduce_edges(vertices, edges, c):
-    pass
-
-
-def create_mst(vertices, edges, epsilon):
-    m = 0
-    n = 0
-    c = math.log(n / m, n)
-    # c = np.log(n / m) / np.log(n)
-    while len(edges) > np.power(n, 1 + epsilon):
-        reduce_edges(vertices, edges, c)
-        c = (c - epsilon) / 2
-    return
-
+# Snap stanford
 
 def get_clustering_data():
     n_samples = 1500
@@ -90,14 +73,114 @@ def get_clustering_data():
 def create_distance_matrix(dataset):
     x = []
     y = []
-    for line in dataset[1]:
+    for line in dataset:
         x.append([line[0]])
         y.append([line[1]])
-    d_matrix = scipy.spatial.distance_matrix(x, y, p=2, threshold=1000000)
-    return d_matrix
+    d_matrix = scipy.spatial.distance_matrix(x, y, threshold=1000000)
+    dict = {}
+    for i in range(len(d_matrix)):
+        dict2 = {}
+        for j in range(len(d_matrix[i])):
+            dict2[j] = d_matrix[i][j]
+        dict[i] = dict2
+    return d_matrix, dict
 
 
-def main():
+def partion_V(vertices, k):
+    U = []
+    V = []
+    random.shuffle(vertices)
+    verticesU = vertices.copy()
+    random.shuffle(vertices)
+    verticesV = vertices.copy()
+    for i in range(len(vertices)):
+        if i < k:
+            U.append({verticesU[i]})
+            V.append({verticesV[i]})
+        else:
+            U[i % k].add(verticesU[i])
+            V[i % k].add(verticesV[i])
+    return U, V
+
+
+def get_key(item):
+    return item[2]
+
+
+def find_mst(V, U, E):
+    vertices = set()
+    for v in V:
+        vertices.add(v)
+    for u in U:
+        vertices.add(u)
+    E = sorted(E, key=get_key)
+    connected_component = set()
+    mst = []
+    remove_edges = []
+    while len(mst) < len(vertices) - 1:
+        for edge in E:
+            if len(connected_component) == 0:
+                connected_component.add(edge[0])
+                connected_component.add(edge[1])
+                mst.append(edge)
+                E.remove(edge)
+                break
+            else:
+                if edge[0] in connected_component:
+                    if edge[1] in connected_component:
+                        remove_edges.append(edge)
+                        E.remove(edge)
+                    else:
+                        connected_component.add(edge[1])
+                        mst.append(edge)
+                        E.remove(edge)
+                        break
+                elif edge[1] in connected_component:
+                    if edge[0] in connected_component:
+                        remove_edges.append(edge)
+                        E.remove(edge)
+                    else:
+                        connected_component.add(edge[0])
+                        mst.append(edge)
+                        E.remove(edge)
+                        break
+    return mst, remove_edges
+
+def get_edges(U, V, E):
+    edges = []
+    for u in U:
+        for v in V:
+            if E[u][v] is not None:
+                edges.append((u, v, E[u][v]))
+    return edges
+
+
+def reduce_edges(vertices, E, c, epsilon):
+    n = len(vertices)
+    k = math.ceil(n**((c - epsilon) / 2))
+    U, V = partion_V(vertices, k)
+
+    # map(lambda u: map(lambda v: find_mst(v, u), V), U)
+    for i in range(len(U)):
+        for j in range(len(V)):
+            edges = get_edges(U[i], V[j], E)
+            mst, removed_edges = find_mst(U[i], V[j], edges)
+    return E
+
+
+def create_mst(V, E, epsilon, m):
+    n = len(V)
+    c = math.log(m / n, n)
+    # This works for now, but not forever
+    # print(np.power(len(E), 2), np.power(n, 1 + epsilon))
+    while np.power(len(E), 2) > np.power(n, 1 + epsilon):
+        print("huh")
+        E = reduce_edges(V, E, c, epsilon)
+        c = (c - epsilon) / 2
+    return
+
+
+def main(machines, c, epsilon):
     parser = ArgumentParser()
     parser.add_argument('--test', help="Used for smaller dataset and testing", action="store_true")
     args = parser.parse_args()
@@ -107,19 +190,30 @@ def main():
         print("Test argument given")
 
     start_time = datetime.now()
-    checkpoint_time = start_time
     print("Starting time:", start_time)
 
     conf = SparkConf().setAppName('MST_Algorithm')
     sc = SparkContext(conf=conf)
 
-    sc.stop()
     # create_mst()
     datasets = get_clustering_data()
 
     for dataset in datasets:
-        create_distance_matrix(dataset)
+        timestamp = datetime.now()
+        dm, E2 = create_distance_matrix(dataset[0][0])
+        print("Created distance matrix in:", datetime.now() - timestamp)
+        V = list(range(len(dm)))
+        create_mst(V, E2, epsilon=0.1, m=machines)
 
+        break
+
+    # dataset = [[0, 0], [1, 1]]
+    # create_distance_matrix(dataset)
+
+    sc.stop()
 
 if __name__ == '__main__':
-    main()
+    machines = 4
+    c = 1/2 # 0 <= c <= 1
+    epsilon = 1/8
+    main(machines=machines, c=c, epsilon=epsilon)
