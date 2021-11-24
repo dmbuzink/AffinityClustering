@@ -73,6 +73,7 @@ def get_clustering_data():
 def create_distance_matrix(dataset):
     x = []
     y = []
+    size = 0
     for line in dataset:
         x.append([line[0]])
         y.append([line[1]])
@@ -81,9 +82,11 @@ def create_distance_matrix(dataset):
     for i in range(len(d_matrix)):
         dict2 = {}
         for j in range(len(d_matrix[i])):
-            dict2[j] = d_matrix[i][j]
+            if i != j:
+                size += 1
+                dict2[j] = d_matrix[i][j]
         dict[i] = dict2
-    return d_matrix, dict
+    return d_matrix, dict, size
 
 
 def partion_V(vertices, k):
@@ -116,7 +119,7 @@ def find_mst(V, U, E):
     E = sorted(E, key=get_key)
     connected_component = set()
     mst = []
-    remove_edges = []
+    remove_edges = set()
     while len(mst) < len(vertices) - 1:
         for edge in E:
             if len(connected_component) == 0:
@@ -128,7 +131,7 @@ def find_mst(V, U, E):
             else:
                 if edge[0] in connected_component:
                     if edge[1] in connected_component:
-                        remove_edges.append(edge)
+                        remove_edges.add(edge)
                         E.remove(edge)
                     else:
                         connected_component.add(edge[1])
@@ -137,45 +140,64 @@ def find_mst(V, U, E):
                         break
                 elif edge[1] in connected_component:
                     if edge[0] in connected_component:
-                        remove_edges.append(edge)
+                        remove_edges.add(edge)
                         E.remove(edge)
                     else:
                         connected_component.add(edge[0])
                         mst.append(edge)
                         E.remove(edge)
                         break
+    for edge in E:
+        remove_edges.add(edge)
     return mst, remove_edges
 
 def get_edges(U, V, E):
     edges = []
     for u in U:
         for v in V:
-            if E[u][v] is not None:
+            if v in E[u]:
                 edges.append((u, v, E[u][v]))
+    print("Getting edges ", len(edges))
     return edges
 
 
 def reduce_edges(vertices, E, c, epsilon):
     n = len(vertices)
     k = math.ceil(n**((c - epsilon) / 2))
+    print("k", k)
     U, V = partion_V(vertices, k)
-
     # map(lambda u: map(lambda v: find_mst(v, u), V), U)
+    removed = set()
     for i in range(len(U)):
         for j in range(len(V)):
             edges = get_edges(U[i], V[j], E)
             mst, removed_edges = find_mst(U[i], V[j], edges)
+            print("removed edges in ", i, " and ", j, " =", len(removed_edges))
+            removed = removed.union(removed_edges)
+    print("total removed: ", len(removed))
+    return removed
+
+
+def remove_edges(E, removed_edges):
+    print("removed edges", len(removed_edges))
+    for edge in removed_edges:
+        if edge[1] in E[edge[0]]:
+            del E[edge[0]][edge[1]]
+        if edge[0] in E[edge[1]]:
+            del E[edge[1]][edge[0]]
     return E
 
 
-def create_mst(V, E, epsilon, m):
+def create_mst(V, E, epsilon, m, size):
     n = len(V)
     c = math.log(m / n, n)
     # This works for now, but not forever
-    # print(np.power(len(E), 2), np.power(n, 1 + epsilon))
-    while np.power(len(E), 2) > np.power(n, 1 + epsilon):
-        print("huh")
-        E = reduce_edges(V, E, c, epsilon)
+    print("size needs to be smaller than: ", np.power(n, 1 + epsilon))
+    print("size is: ", size)
+    while size > np.power(n, 1 + epsilon):
+        removed_edges = reduce_edges(V, E, c, epsilon)
+        E = remove_edges(E, removed_edges)
+        size = size - len(removed_edges)
         c = (c - epsilon) / 2
     return
 
@@ -200,10 +222,10 @@ def main(machines, c, epsilon):
 
     for dataset in datasets:
         timestamp = datetime.now()
-        dm, E2 = create_distance_matrix(dataset[0][0])
+        dm, E2, size = create_distance_matrix(dataset[0][0])
         print("Created distance matrix in:", datetime.now() - timestamp)
         V = list(range(len(dm)))
-        create_mst(V, E2, epsilon=0.1, m=machines)
+        create_mst(V, E2, epsilon=0.1, m=machines, size= size)
 
         break
 
