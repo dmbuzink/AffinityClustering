@@ -1,6 +1,7 @@
 import math
 from argparse import ArgumentParser
 from datetime import datetime
+from typing import Tuple
 
 import numpy as np
 import random
@@ -108,83 +109,92 @@ def get_key(item):
     return item[2]
 
 
-def find_mst(V, U, E):
-    e_copy = E.copy()
+def find_mst(U, V, E):
     vertices = set()
     for v in V:
         vertices.add(v)
     for u in U:
         vertices.add(u)
-    e_copy = sorted(e_copy, key=get_key)
+    E = sorted(E, key=get_key)
     connected_component = set()
-    mst = set()
+    mst = []
     remove_edges = set()
     while len(mst) < len(vertices) - 1:
-        for edge in e_copy:
+        for edge in E:
             if len(connected_component) == 0:
                 connected_component.add(edge[0])
                 connected_component.add(edge[1])
-                mst.add(edge)
+                mst.append(edge)
                 E.remove(edge)
                 break
             else:
                 if edge[0] in connected_component:
                     if edge[1] in connected_component:
                         remove_edges.add(edge)
-                        e_copy.remove(edge)
+                        E.remove(edge)
                     else:
                         connected_component.add(edge[1])
-                        mst.add(edge)
-                        e_copy.remove(edge)
+                        mst.append(edge)
+                        E.remove(edge)
                         break
                 elif edge[1] in connected_component:
                     if edge[0] in connected_component:
                         remove_edges.add(edge)
-                        e_copy.remove(edge)
+                        E.remove(edge)
                     else:
                         connected_component.add(edge[0])
-                        mst.add(edge)
-                        e_copy.remove(edge)
+                        mst.append(edge)
+                        E.remove(edge)
                         break
-    for edge in e_copy:
+    for edge in E:
         remove_edges.add(edge)
     return mst, remove_edges
 
 
 """
-get_edges that works without the pyspark implementation
+get_edges that works with the pyspark implementation
 
-Here U and V are the partitionings of the graph and for every combination it returns the edges corresponding to this graph
+For an pair UV it returns the edges corresponding to this graph
 """
-def get_edges1(U, V, E):
-    subgraphs = []
-    for u in U:
-        first = []
-        for v in V:
-            edges = []
-            for node1 in u:
-                for node2 in v:
-                    if node2 in E[node1]:
-                        edges.append((node1, node2, E[node1][node2]))
-            first.append(edges)
-        subgraphs.append(first)
-    return subgraphs
+def get_edges(U, V, E):
+    edges = []
+    for node1 in U:
+        for node2 in V:
+            if node2 in E[node1]:
+                edges.append((node1, node2, E[node1][node2]))
+    return U, V, edges
 
 
+"""
+Input: vertices = vertices of the graph, E = edges of the graph, c, epsilon
+Output: mst, removed = edges to be removed
+
+"""
 def reduce_edges(vertices, E, c, epsilon):
+    conf = SparkConf().setAppName('MST_Algorithm')
+    sc = SparkContext.getOrCreate(conf=conf)
+
     n = len(vertices)
     k = math.ceil(n**((c - epsilon) / 2))
     U, V = partion_vertices(vertices, k)
-    subgraphs = get_edges1(U, V, E)
     removed = set()
     mst = set()
-    for i in range(len(U)):
-        for j in range(len(V)):
-            mst, removed_edges = find_mst(U[i], V[j], subgraphs[i][j])
-            removed = removed.union(removed_edges)
-    return mst, removed
+    rddU = sc.parallelize(U)
+    rddV = sc.parallelize(V)
+    rddUV = rddU.cartesian(rddV)
+    rddUV1 = rddUV.map(lambda x: get_edges(x[0], x[1], E))
+    rddUV2 = rddUV1.map(lambda x: (find_mst(x[0], x[1], x[2])))
+    first = rddUV2.map(lambda x: x[0])
+    second = rddUV2.map(lambda x: x[1])
+    mst = first.collect()
+    removed_values = second.collect()
+    return mst, removed_values
 
 
+"""
+Input: E = current edges, removed_edges = edges to be removed from the edges
+Output: E = updated edges where removed_edges are not part of it
+"""
 def remove_edges(E, removed_edges, mst):
     for edge in removed_edges:
         if edge[1] in E[edge[0]]:
@@ -210,7 +220,7 @@ def create_mst(V, E, epsilon, m, size):
     return E
 
 
-def main(machines, epsilon):
+def main(machines, c, epsilon):
     parser = ArgumentParser()
     parser.add_argument('--test', help="Used for smaller dataset and testing", action="store_true")
     args = parser.parse_args()
@@ -234,9 +244,10 @@ def main(machines, epsilon):
         print("Start creating MST...")
         timestamp = datetime.now()
         E = create_mst(V, E, epsilon=epsilon, m=machines, size=size)
-        U, V = partion_vertices(V, 1)
-        E = get_edges1(U, V, E)
-        mst, removed_edges = find_mst(U[0], V[0], E[0][0])
+        print("hier")
+        # U, V = partion_vertices(V, 1)
+        # E = get_edges(U, V, E)
+        # mst, removed_edges = find_mst(U[0], V[0], E[0][0])
         print("Created MST in: ", datetime.now() - timestamp)
         # print("MST:\n", mst)
         print("Start creating plot of MST...")
@@ -250,4 +261,4 @@ if __name__ == '__main__':
     machines = 4
     c = 1/2 # 0 <= c <= 1
     epsilon = 1/8
-    main(machines=machines, epsilon=epsilon)
+    main(machines=machines, c=c, epsilon=epsilon)
