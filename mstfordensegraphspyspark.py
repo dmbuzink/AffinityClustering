@@ -146,7 +146,7 @@ def find_mst(U, V, E):
     connected_component = set()
     mst = []
     remove_edges = set()
-    while len(mst) < len(vertices) - 1:
+    while len(mst) < len(vertices) - 1 and len(connected_component) < len(vertices):
         for edge in E:
             if len(connected_component) == 0:
                 connected_component.add(edge[0])
@@ -175,6 +175,10 @@ def find_mst(U, V, E):
                         break
     for edge in E:
         remove_edges.add(edge)
+    if len(mst) != len(vertices) - 1 or len(connected_component) != len(vertices):
+        print("Error: MST found cannot be correct \n Length mst: ", len(mst), "\n Total connected vertices: ", len(connected_component), "\n Number of vertices: ", len(vertices))
+        print("MST found: ", mst)
+        quit()
     return mst, remove_edges
 
 
@@ -269,19 +273,27 @@ def create_mst(V, E, epsilon, m, size):
             size_removed_edges += len(i)
         size = size - size_removed_edges
         c = (c - epsilon) / 2
-        print(size, mst)
-    return E
+    # Now the number of edges is reduced and can be moved to a single machine
+    V = set(range(n))
+    items = E.items() # returns [(x, {y : 1})]
+    edges = []
+    for item in items:
+        items2 = item[1].items()
+        for item2 in items2:
+            edges.append((item[0], item2[0], item2[1]))
+    mst, removed_edges = find_mst(V, V, edges)
+
+    return mst
 
 
-def main(machines, c, epsilon):
+def main():
     """
     For every dataset, it creates the mst and plots the clustering
-    :param machines: number of machines
-    :param c: constant
-    :param epsilon:
     """
     parser = ArgumentParser()
     parser.add_argument('--test', help="Used for smaller dataset and testing", action="store_true")
+    parser.add_argument('--epsilon', help="epsilon [default=1/8]", type=float, default=1/8)
+    parser.add_argument('--machines', help="Number of machines [default=1]", type=int, default=1)
     args = parser.parse_args()
 
     print("Start generating MST")
@@ -302,23 +314,18 @@ def main(machines, c, epsilon):
         print("Created distance matrix in: ", datetime.now() - timestamp)
         print("Start creating MST...")
         timestamp = datetime.now()
-        E = create_mst(V, E, epsilon=epsilon, m=machines, size=size)
-        print("hier")
-        # U, V = partion_vertices(V, 1)
-        # E = get_edges(U, V, E)
-        # mst, removed_edges = find_mst(U[0], V[0], E[0][0])
+        mst = create_mst(V, E, epsilon=args.epsilon, m=args.machines, size=size)
         print("Created MST in: ", datetime.now() - timestamp)
-        # print("MST:\n", mst)
+        print("MST:\n", mst)
         print("Start creating plot of MST...")
         timestamp = datetime.now()
         print("TODO...")
         print("Created plot of MST in: ", datetime.now() - timestamp)
         break
 
+    print("Done...")
 
-# start of program, set values of constants
+
 if __name__ == '__main__':
-    machines = 8
-    c = 1/2 # 0 <= c <= 1
-    epsilon = 1/8
-    main(machines=machines, c=c, epsilon=epsilon)
+    # Initial call to main function
+    main()

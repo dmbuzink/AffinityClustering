@@ -156,7 +156,9 @@ get_edges that works without the pyspark implementation
 
 Here U and V are the partitionings of the graph and for every combination it returns the edges corresponding to this graph
 """
-def get_edges1(U, V, E):
+def get_edges(U, V, E):
+    if len(U) == len(V) == 1:
+        return E.items()
     subgraphs = []
     for u in U:
         first = []
@@ -175,7 +177,7 @@ def reduce_edges(vertices, E, c, epsilon):
     n = len(vertices)
     k = math.ceil(n**((c - epsilon) / 2))
     U, V = partion_vertices(vertices, k)
-    subgraphs = get_edges1(U, V, E)
+    subgraphs = get_edges(U, V, E)
     removed = set()
     mst = set()
     for i in range(len(U)):
@@ -238,8 +240,8 @@ def main(machines, epsilon):
         print("Start creating MST...")
         timestamp = datetime.now()
         E = create_mst(V, E, epsilon=epsilon, m=machines, size=size)
-        U, V = partion_vertices(V, 1)
-        E = get_edges1(U, V, E)
+        U, V = set(range(1500))
+        E = get_edges(U, V, E)
         mst, removed_edges = find_mst(U[0], V[0], E[0][0])
         print("Created MST in: ", datetime.now() - timestamp)
         # print("MST:\n", mst)
