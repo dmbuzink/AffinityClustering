@@ -264,7 +264,10 @@ def create_mst(V, E, epsilon, m, size):
     while size > np.power(n, 1 + epsilon):
         mst, removed_edges = reduce_edges(V, E, c, epsilon)
         E = remove_edges(E, removed_edges, mst)
-        size = size - len(removed_edges)
+        size_removed_edges = 0
+        for i in removed_edges:
+            size_removed_edges += len(i)
+        size = size - size_removed_edges
         c = (c - epsilon) / 2
         print(size, mst)
     return E
