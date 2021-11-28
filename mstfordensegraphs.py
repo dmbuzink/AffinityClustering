@@ -185,6 +185,10 @@ def reduce_edges(vertices, E, c, epsilon):
     return mst, removed
 
 
+"""
+Input: E = current edges, removed_edges = edges to be removed from the edges, mst = edges that should not be removed
+Output: E = updated edges where removed_edges are not part of it
+"""
 def remove_edges(E, removed_edges, mst):
     for edge in removed_edges:
         if edge[1] in E[edge[0]]:

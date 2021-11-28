@@ -19,6 +19,10 @@ from pyspark import RDD, SparkConf, SparkContext
 # Snap stanford
 
 def get_clustering_data():
+    """
+    Retrieves all toy datasets from sklearn
+    :return: circles, moons, blobs datasets.
+    """
     n_samples = 1500
     noisy_circles = make_circles(n_samples=n_samples, factor=.5,
                                           noise=.05)
@@ -70,6 +74,11 @@ def get_clustering_data():
 
 
 def create_distance_matrix(dataset):
+    """
+    Creates the distance matrix for a dataset with only vertices. Also adds the edges to a dict.
+    :param dataset: dataset without edges
+    :return: distance matrix, a dict of all edges and the total number of edges
+    """
     x = []
     y = []
     size = 0
@@ -89,6 +98,12 @@ def create_distance_matrix(dataset):
 
 
 def partion_vertices(vertices, k):
+    """
+    Partitioning of the vertices in k smaller subsets (creates a partitioning twice
+    :param vertices: all vertices
+    :param k: number of subsets that need to be created
+    :return: the partitioning in list format
+    """
     U = []
     V = []
     random.shuffle(vertices)
@@ -106,10 +121,22 @@ def partion_vertices(vertices, k):
 
 
 def get_key(item):
+    """
+    returns the sorting criteria for the edges. All edges are sorted from small to large values
+    :param item: one item
+    :return: returns the weight of the edge
+    """
     return item[2]
 
 
 def find_mst(U, V, E):
+    """
+    finds the mst of graph G = (U union V, E)
+    :param U: vertices U
+    :param V: vertices V
+    :param E: edges of the graph
+    :return: the mst and edges not in the mst of the graph
+    """
     vertices = set()
     for v in V:
         vertices.add(v)
@@ -151,12 +178,14 @@ def find_mst(U, V, E):
     return mst, remove_edges
 
 
-"""
-get_edges that works with the pyspark implementation
-
-For an pair UV it returns the edges corresponding to this graph
-"""
 def get_edges(U, V, E):
+    """
+    :param U: subset of vertices (u_j)
+    :param V: subset of vertices (v_i)
+    :param E: all edges of the whole graph
+    :return: all edges that are part of the graph u_j U v_j
+    """
+
     edges = []
     for node1 in U:
         for node2 in V:
@@ -165,20 +194,24 @@ def get_edges(U, V, E):
     return U, V, edges
 
 
-"""
-Input: vertices = vertices of the graph, E = edges of the graph, c, epsilon
-Output: mst, removed = edges to be removed
-
-"""
 def reduce_edges(vertices, E, c, epsilon):
+    """
+    Uses PySpark to distribute the computation of the MSTs,
+    Randomly partition the vertices twice in k subsets (U = {u_1, u_2, .., u_k}, V = {v_1, v_2, .., v_k})
+    For every intersection between U_i and V_j, create the subgraph and find the MST in this graph
+    Remove all edges from E that are not part of the MST in the subgraph
+    :param vertices: vertices in the graph
+    :param E: edges of the graph
+    :param c: constant
+    :param epsilon:
+    :return:The reduced number of edges
+    """
     conf = SparkConf().setAppName('MST_Algorithm')
     sc = SparkContext.getOrCreate(conf=conf)
 
     n = len(vertices)
     k = math.ceil(n**((c - epsilon) / 2))
     U, V = partion_vertices(vertices, k)
-    removed = set()
-    mst = set()
     rddU = sc.parallelize(U)
     rddV = sc.parallelize(V)
     rddUV = rddU.cartesian(rddV)
@@ -187,29 +220,45 @@ def reduce_edges(vertices, E, c, epsilon):
     first = rddUV2.map(lambda x: x[0])
     second = rddUV2.map(lambda x: x[1])
     mst = first.collect()
-    removed_values = second.collect()
-    return mst, removed_values
+    removed_edges = second.collect()
+    return mst, removed_edges
 
 
-"""
-Input: E = current edges, removed_edges = edges to be removed from the edges
-Output: E = updated edges where removed_edges are not part of it
-"""
-def remove_edges(E, removed_edges, mst):
-    for edge in removed_edges:
-        if edge[1] in E[edge[0]]:
-            del E[edge[0]][edge[1]]
-        if edge[0] in E[edge[1]]:
-            del E[edge[1]][edge[0]]
-    for edge in mst:
-        if edge[1] not in E[edge[0]]:
-            E[edge[0]][edge[1]] = edge[2]
-        if edge[0] not in E[edge[1]]:
-            E[edge[1]][edge[0]] = edge[2]
+def remove_edges(E, removed_edges, msts):
+    """
+    Removes the edges, which are removed when generating msts
+    :param E: current edges
+    :param removed_edges: edges to be removed
+    :param msts: edges in the msts
+    :return: return the updated edge dict
+    """
+    for removed_edge in removed_edges:
+        for edge in removed_edge:
+            if edge[1] in E[edge[0]]:
+                del E[edge[0]][edge[1]]
+            if edge[0] in E[edge[1]]:
+                del E[edge[1]][edge[0]]
+        for mst in msts:
+            for edge in mst:
+                if edge[1] not in E[edge[0]]:
+                    E[edge[0]][edge[1]] = edge[2]
+                if edge[0] not in E[edge[1]]:
+                    E[edge[1]][edge[0]] = edge[2]
     return E
 
 
 def create_mst(V, E, epsilon, m, size):
+    """
+    Creates the mst of the graph G = (V, E).
+    As long as the number of edges is greater than n ^(1 + epsilon), the number of edges is reduced
+    Then the edges that needs to be removed are removed from E and the size is updated.
+    :param V: Vertices
+    :param E: edges
+    :param epsilon:
+    :param m: number of machines
+    :param size: number of edges
+    :return: returns the reduced graph with at most np.power(n, 1 + epsilon) edges
+    """
     n = len(V)
     c = math.log(m / n, n)
     while size > np.power(n, 1 + epsilon):
@@ -217,10 +266,17 @@ def create_mst(V, E, epsilon, m, size):
         E = remove_edges(E, removed_edges, mst)
         size = size - len(removed_edges)
         c = (c - epsilon) / 2
+        print(size, mst)
     return E
 
 
 def main(machines, c, epsilon):
+    """
+    For every dataset, it creates the mst and plots the clustering
+    :param machines: number of machines
+    :param c: constant
+    :param epsilon:
+    """
     parser = ArgumentParser()
     parser.add_argument('--test', help="Used for smaller dataset and testing", action="store_true")
     args = parser.parse_args()
@@ -257,8 +313,9 @@ def main(machines, c, epsilon):
         break
 
 
+# start of program, set values of constants
 if __name__ == '__main__':
-    machines = 4
+    machines = 8
     c = 1/2 # 0 <= c <= 1
     epsilon = 1/8
     main(machines=machines, c=c, epsilon=epsilon)
