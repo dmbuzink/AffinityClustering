@@ -8,6 +8,7 @@ import random
 import matplotlib.pyplot as plt
 import scipy.spatial
 import sklearn
+import csv
 
 from sklearn import cluster, datasets, mixture
 from sklearn.datasets import make_circles, make_moons, make_blobs
@@ -81,11 +82,11 @@ def create_distance_matrix(dataset):
     """
     x = []
     y = []
+    vertices = []
     size = 0
     for line in dataset:
-        x.append([line[0]])
-        y.append([line[1]])
-    d_matrix = scipy.spatial.distance_matrix(x, y, threshold=1000000)
+        vertices.append([line[0], line[1]])
+    d_matrix = scipy.spatial.distance_matrix(vertices, vertices, threshold=1000000)
     dict = {}
     for i in range(len(d_matrix)):
         dict2 = {}
@@ -94,7 +95,7 @@ def create_distance_matrix(dataset):
                 size += 1
                 dict2[j] = d_matrix[i][j]
         dict[i] = dict2
-    return d_matrix, dict, size
+    return d_matrix, dict, size, vertices
 
 
 def partion_vertices(vertices, k):
@@ -286,6 +287,29 @@ def create_mst(V, E, epsilon, m, size):
     return mst
 
 
+def plot_mst(vertices, mst):
+    x = []
+    y = []
+    c = []
+    area = []
+    for i in range(len(vertices)):
+        x.append(float(vertices[i][0]))
+        y.append(float(vertices[i][1]))
+        area.append(0.1)
+        c.append("black")
+    plt.scatter(x, y, c=c, s=area)
+
+    for i in range(len(mst)):
+        linex = [float(x[int(mst[i][0])])]
+        liney = [float(y[int(mst[i][0])])]
+        linex.append(float(x[int(mst[i][1])]))
+        liney.append(float(y[int(mst[i][1])]))
+        print(linex, liney, mst[i][2])
+        plt.plot(linex, liney)
+    plt.show()
+    return
+
+
 def main():
     """
     For every dataset, it creates the mst and plots the clustering
@@ -309,8 +333,9 @@ def main():
     for dataset in datasets:
         timestamp = datetime.now()
         print("Start creating Distance Matrix...")
-        dm, E, size = create_distance_matrix(dataset[0][0])
+        dm, E, size, vertices_coordinates = create_distance_matrix(dataset[0][0])
         V = list(range(len(dm)))
+        print("Size dataset: ", len(dm))
         print("Created distance matrix in: ", datetime.now() - timestamp)
         print("Start creating MST...")
         timestamp = datetime.now()
@@ -319,9 +344,9 @@ def main():
         print("MST:\n", mst)
         print("Start creating plot of MST...")
         timestamp = datetime.now()
-        print("TODO...")
+        plot_mst(dataset[0][0], mst)
         print("Created plot of MST in: ", datetime.now() - timestamp)
-        break
+
 
     print("Done...")
 
@@ -329,3 +354,21 @@ def main():
 if __name__ == '__main__':
     # Initial call to main function
     main()
+    quit()
+    mst = []
+    vertices = []
+    with open('mst.csv') as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        lines = 0
+        for row in csv_reader:
+            line = (row[0], row[1], row[2])
+            mst.append(line)
+
+    with open('vertices.csv') as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        lines = 0
+        for row in csv_reader:
+            line = (row[0], row[1])
+            vertices.append(line)
+
+    plot_mst(vertices, mst)
