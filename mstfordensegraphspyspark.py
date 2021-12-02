@@ -47,18 +47,6 @@ def get_clustering_data():
     plt.subplots_adjust(left=.02, right=.98, bottom=.001, top=.95, wspace=.05,
                         hspace=.01)
 
-    plot_num = 1
-
-    default_base = {'quantile': .3,
-                    'eps': .3,
-                    'damping': .9,
-                    'preference': -200,
-                    'n_neighbors': 10,
-                    'n_clusters': 3,
-                    'min_samples': 20,
-                    'xi': 0.05,
-                    'min_cluster_size': 0.1}
-
     datasets = [
         (noisy_circles, {'damping': .77, 'preference': -240,
                          'quantile': .2, 'n_clusters': 2,
@@ -80,8 +68,6 @@ def create_distance_matrix(dataset):
     :param dataset: dataset without edges
     :return: distance matrix, a dict of all edges and the total number of edges
     """
-    x = []
-    y = []
     vertices = []
     size = 0
     for line in dataset:
@@ -217,15 +203,23 @@ def reduce_edges(vertices, E, c, epsilon):
     n = len(vertices)
     k = math.ceil(n**((c - epsilon) / 2))
     U, V = partion_vertices(vertices, k)
-    rddU = sc.parallelize(U)
-    rddV = sc.parallelize(V)
-    rddUV = rddU.cartesian(rddV)
-    rddUV1 = rddUV.map(lambda x: get_edges(x[0], x[1], E))
-    rddUV2 = rddUV1.map(lambda x: (find_mst(x[0], x[1], x[2])))
-    first = rddUV2.map(lambda x: x[0])
-    second = rddUV2.map(lambda x: x[1])
-    mst = first.collect()
-    removed_edges = second.collect()
+    time = datetime.now()
+    print("time", datetime.now())
+    rddUV = sc.parallelize(U).cartesian(sc.parallelize(V)).map(lambda x: get_edges(x[0], x[1], E)).map(lambda x: (find_mst(x[0], x[1], x[2]))).cache()
+    print("Creation of MST in smaller subsets: ", datetime.now() - time)
+    time = datetime.now()
+    both = rddUV.collect()
+    print("Collection of RDD: ", datetime.now() - time)
+    mst = []
+    removed_edges = []
+    for i in range(len(both)):
+        mst.append(both[i][0])
+        removed_edges.append(both[i][1])
+    # mst = rddUV.map(lambda x: x[0]).collect()
+    # print("mst", datetime.now() - time)
+    # time = datetime.now()
+    # removed_edges = rddUV.map(lambda x: x[1]).collect()
+    # print("Removed edges", datetime.now() - time)
     return mst, removed_edges
 
 
@@ -304,7 +298,6 @@ def plot_mst(vertices, mst):
         liney = [float(y[int(mst[i][0])])]
         linex.append(float(x[int(mst[i][1])]))
         liney.append(float(y[int(mst[i][1])]))
-        print(linex, liney, mst[i][2])
         plt.plot(linex, liney)
     plt.show()
     return
@@ -329,7 +322,7 @@ def main():
 
     # create_mst()
     datasets = get_clustering_data()
-
+    cnt = 0
     for dataset in datasets:
         timestamp = datetime.now()
         print("Start creating Distance Matrix...")
@@ -341,7 +334,7 @@ def main():
         timestamp = datetime.now()
         mst = create_mst(V, E, epsilon=args.epsilon, m=args.machines, size=size)
         print("Created MST in: ", datetime.now() - timestamp)
-        print("MST:\n", mst)
+        #print("MST:\n", mst)
         print("Start creating plot of MST...")
         timestamp = datetime.now()
         plot_mst(dataset[0][0], mst)
@@ -354,21 +347,3 @@ def main():
 if __name__ == '__main__':
     # Initial call to main function
     main()
-    quit()
-    mst = []
-    vertices = []
-    with open('mst.csv') as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        lines = 0
-        for row in csv_reader:
-            line = (row[0], row[1], row[2])
-            mst.append(line)
-
-    with open('vertices.csv') as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        lines = 0
-        for row in csv_reader:
-            line = (row[0], row[1])
-            vertices.append(line)
-
-    plot_mst(vertices, mst)
