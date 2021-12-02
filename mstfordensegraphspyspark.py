@@ -259,7 +259,7 @@ def create_mst(V, E, epsilon, m, size):
     :return: returns the reduced graph with at most np.power(n, 1 + epsilon) edges
     """
     n = len(V)
-    c = math.log(m / n, n)
+    c = math.log(size / n, n)
     while size > np.power(n, 1 + epsilon):
         mst, removed_edges = reduce_edges(V, E, c, epsilon)
         E = remove_edges(E, removed_edges, mst)
