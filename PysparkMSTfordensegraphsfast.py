@@ -172,9 +172,9 @@ def find_mst(U, V, E):
     for edge in E:
         remove_edges.add(edge)
     if len(mst) != len(vertices) - 1 or len(connected_component) != len(vertices):
-        print("Partition cannot have a full mst")
-        print("Error: MST found cannot be correct \n Length mst: ", len(mst), "\n Total connected vertices: ",
-              len(connected_component), "\n Number of vertices: ", len(vertices))
+        print("Warning: parition cannot have a full MST! Missing edges to create full MST.")
+        # print("Error: MST found cannot be correct \n Length mst: ", len(mst), "\n Total connected vertices: ",
+        #       len(connected_component), "\n Number of vertices: ", len(vertices))
     return mst, remove_edges
 
 
@@ -265,7 +265,7 @@ def create_mst(V, E, epsilon, size, vertex_coordinates):
         E = remove_edges(E, removed_edges)
         print("Total edges removed in this iteration", len(removed_edges))
         size = size - len(removed_edges)
-        print("new size: ", size)
+        print("New total of edges: ", size)
         c = (c - epsilon) / 2
     # Now the number of edges is reduced and can be moved to a single machine
     V = set(range(n))
@@ -276,7 +276,6 @@ def create_mst(V, E, epsilon, size, vertex_coordinates):
         for item2 in items2:
             edges.append((item[0], item2[0], item2[1]))
     mst, removed_edges = find_mst(V, V, edges)
-    print(len(mst))
     return mst
 
 
