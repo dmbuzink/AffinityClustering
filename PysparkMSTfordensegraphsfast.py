@@ -167,8 +167,10 @@ def find_mst(U, V, E):
                     i += 1
         if not change:
             if len(E) != 0:
-                print(connected_component)
-                print(E)
+                connected_component.add(E[0][0])
+                connected_component.add(E[0][1])
+                mst.append(E[0])
+                E.remove(E[0])
     for edge in E:
         remove_edges.add(edge)
     if len(mst) != len(vertices) - 1 or len(connected_component) != len(vertices):
@@ -245,7 +247,7 @@ def remove_edges(E, removed_edges):
     return E
 
 
-def create_mst(V, E, epsilon, size, vertex_coordinates):
+def create_mst(V, E, epsilon, size, vertex_coordinates, plot_itermediate=False):
     """
     Creates the mst of the graph G = (V, E).
     As long as the number of edges is greater than n ^(1 + epsilon), the number of edges is reduced
@@ -262,6 +264,8 @@ def create_mst(V, E, epsilon, size, vertex_coordinates):
     while size > np.power(n, 1 + epsilon):
         print("C: ", c)
         mst, removed_edges = reduce_edges(V, E, c, epsilon)
+        if plot_itermediate:
+            plot_mst(vertex_coordinates, mst, True, False)
         E = remove_edges(E, removed_edges)
         print("Total edges removed in this iteration", len(removed_edges))
         size = size - len(removed_edges)
@@ -279,24 +283,47 @@ def create_mst(V, E, epsilon, size, vertex_coordinates):
     return mst
 
 
-def plot_mst(vertices, mst):
+def plot_mst(vertices, mst, intermediate=False, plot_cluster=False):
     x = []
     y = []
     c = []
     area = []
+    colors = ["g", "b", "r", "c", "m", "y", "k", "darkorange", "dodgerblue", "deeppink", "khaki", "purple",
+              "springgreen", "tomato", "slategray"]
     for i in range(len(vertices)):
         x.append(float(vertices[i][0]))
         y.append(float(vertices[i][1]))
         area.append(0.1)
         c.append("black")
     plt.scatter(x, y, c=c, s=area)
-
-    for i in range(len(mst)):
-        linex = [float(x[int(mst[i][0])])]
-        liney = [float(y[int(mst[i][0])])]
-        linex.append(float(x[int(mst[i][1])]))
-        liney.append(float(y[int(mst[i][1])]))
-        plt.plot(linex, liney)
+    if intermediate:
+        cnt = 0
+        for m in mst:
+            for i in range(len(m)):
+                linex = [float(x[int(m[i][0])])]
+                liney = [float(y[int(m[i][0])])]
+                linex.append(float(x[int(m[i][1])]))
+                liney.append(float(y[int(m[i][1])]))
+                plt.plot(linex, liney, colors[cnt])
+            cnt = (cnt + 1) % len(colors)
+    else:
+        # TODO
+        if plot_cluster:
+            edges = sorted(mst, key=get_key, reverse=True)
+            total_length = 0
+            for edge in edges:
+                total_length += edge[2]
+            average_length = total_length / len(edges)
+            print(average_length)
+            print(edges[0], edges[1], edges[2], edges[3])
+            print("Not yet implemented")
+        else:
+            for i in range(len(mst)):
+                linex = [float(x[int(mst[i][0])])]
+                liney = [float(y[int(mst[i][0])])]
+                linex.append(float(x[int(mst[i][1])]))
+                liney.append(float(y[int(mst[i][1])]))
+                plt.plot(linex, liney)
     plt.show()
     return
 
@@ -333,7 +360,7 @@ def main():
         print("Found MST in: ", datetime.now() - timestamp)
         print("Start creating plot of MST...")
         timestamp = datetime.now()
-        plot_mst(dataset[0][0], mst)
+        plot_mst(dataset[0][0], mst, False, False)
         print("Created plot of MST in: ", datetime.now() - timestamp)
 
     print("Done...")
