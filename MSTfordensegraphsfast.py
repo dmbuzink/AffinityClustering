@@ -1,22 +1,17 @@
 import math
 from argparse import ArgumentParser
 from datetime import datetime
-from typing import Tuple
 
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 import scipy.spatial
-import sklearn
-import csv
 
-from sklearn import cluster, datasets, mixture
 from sklearn.datasets import make_circles, make_moons, make_blobs
-from sklearn.neighbors import kneighbors_graph
-from sklearn.preprocessing import StandardScaler
-from itertools import cycle, islice
 
 from pyspark import RDD, SparkConf, SparkContext
+
+
 # Snap stanford
 
 def get_clustering_data():
@@ -26,7 +21,7 @@ def get_clustering_data():
     """
     n_samples = 1500
     noisy_circles = make_circles(n_samples=n_samples, factor=.5,
-                                          noise=.05)
+                                 noise=.05)
     noisy_moons = make_moons(n_samples=n_samples, noise=.05)
     blobs = make_blobs(n_samples=n_samples, random_state=8)
     no_structure = np.random.rand(n_samples, 2), None
@@ -40,8 +35,8 @@ def get_clustering_data():
 
     # blobs with varied variances
     varied = make_blobs(n_samples=n_samples,
-                                 cluster_std=[1.0, 2.5, 0.5],
-                                 random_state=random_state)
+                        cluster_std=[1.0, 2.5, 0.5],
+                        random_state=random_state)
 
     plt.figure(figsize=(9 * 2 + 3, 13))
     plt.subplots_adjust(left=.02, right=.98, bottom=.001, top=.95, wspace=.05,
@@ -74,9 +69,10 @@ def create_distance_matrix(dataset):
         vertices.append([line[0], line[1]])
     d_matrix = scipy.spatial.distance_matrix(vertices, vertices, threshold=1000000)
     dict = {}
+    # Run with less edges
     for i in range(len(d_matrix)):
         dict2 = {}
-        for j in range(len(d_matrix[i])):
+        for j in range(i, len(d_matrix)):
             if i != j:
                 size += 1
                 dict2[j] = d_matrix[i][j]
@@ -134,38 +130,51 @@ def find_mst(U, V, E):
     mst = []
     remove_edges = set()
     while len(mst) < len(vertices) - 1 and len(connected_component) < len(vertices):
-        for edge in E:
+        if len(E) == 0:
+            break
+        change = False
+        i = 0
+        while i < len(E):
             if len(connected_component) == 0:
-                connected_component.add(edge[0])
-                connected_component.add(edge[1])
-                mst.append(edge)
-                E.remove(edge)
+                connected_component.add(E[i][0])
+                connected_component.add(E[i][1])
+                mst.append(E[i])
+                change = True
+                E.remove(E[i])
                 break
             else:
-                if edge[0] in connected_component:
-                    if edge[1] in connected_component:
-                        remove_edges.add(edge)
-                        E.remove(edge)
+                if E[i][0] in connected_component:
+                    if E[i][1] in connected_component:
+                        remove_edges.add(E[i])
+                        E.remove(E[i])
                     else:
-                        connected_component.add(edge[1])
-                        mst.append(edge)
-                        E.remove(edge)
+                        connected_component.add(E[i][1])
+                        mst.append(E[i])
+                        E.remove(E[i])
+                        change = True
                         break
-                elif edge[1] in connected_component:
-                    if edge[0] in connected_component:
-                        remove_edges.add(edge)
-                        E.remove(edge)
+                elif E[i][1] in connected_component:
+                    if E[i][0] in connected_component:
+                        remove_edges.add(E[i])
+                        E.remove(E[i])
                     else:
-                        connected_component.add(edge[0])
-                        mst.append(edge)
-                        E.remove(edge)
+                        connected_component.add(E[i][0])
+                        mst.append(E[i])
+                        E.remove(E[i])
+                        change = True
                         break
+                else:
+                    i += 1
+        if not change:
+            if len(E) != 0:
+                print(connected_component)
+                print(E)
     for edge in E:
         remove_edges.add(edge)
     if len(mst) != len(vertices) - 1 or len(connected_component) != len(vertices):
-        print("Error: MST found cannot be correct \n Length mst: ", len(mst), "\n Total connected vertices: ", len(connected_component), "\n Number of vertices: ", len(vertices))
-        print("MST found: ", mst)
-        quit()
+        print("Partition cannot have a full mst")
+        print("Error: MST found cannot be correct \n Length mst: ", len(mst), "\n Total connected vertices: ",
+              len(connected_component), "\n Number of vertices: ", len(vertices))
     return mst, remove_edges
 
 
@@ -176,13 +185,17 @@ def get_edges(U, V, E):
     :param E: all edges of the whole graph
     :return: all edges that are part of the graph u_j U v_j
     """
-
-    edges = []
+    edges = set()
     for node1 in U:
         for node2 in V:
             if node2 in E[node1]:
-                edges.append((node1, node2, E[node1][node2]))
-    return U, V, edges
+                edges.add((node1, node2, E[node1][node2]))
+            elif node1 in E[node2]:
+                edges.add((node2, node1, E[node2][node1]))
+    edge_list = []
+    for edge in edges:
+        edge_list.append(edge)
+    return U, V, edge_list
 
 
 def reduce_edges(vertices, E, c, epsilon):
@@ -201,29 +214,24 @@ def reduce_edges(vertices, E, c, epsilon):
     sc = SparkContext.getOrCreate(conf=conf)
 
     n = len(vertices)
-    k = math.ceil(n**((c - epsilon) / 2))
+    k = math.ceil(n ** ((c - epsilon) / 2))
     U, V = partion_vertices(vertices, k)
-    time = datetime.now()
-    print("time", datetime.now())
-    rddUV = sc.parallelize(U).cartesian(sc.parallelize(V)).map(lambda x: get_edges(x[0], x[1], E)).map(lambda x: (find_mst(x[0], x[1], x[2]))).cache()
-    print("Creation of MST in smaller subsets: ", datetime.now() - time)
-    time = datetime.now()
+    rddUV = sc.parallelize(U).cartesian(sc.parallelize(V)).map(lambda x: get_edges(x[0], x[1], E)).map(
+        lambda x: (find_mst(x[0], x[1], x[2])))
     both = rddUV.collect()
-    print("Collection of RDD: ", datetime.now() - time)
+
     mst = []
-    removed_edges = []
+    removed_edges = set()
     for i in range(len(both)):
         mst.append(both[i][0])
-        removed_edges.append(both[i][1])
-    # mst = rddUV.map(lambda x: x[0]).collect()
-    # print("mst", datetime.now() - time)
-    # time = datetime.now()
-    # removed_edges = rddUV.map(lambda x: x[1]).collect()
-    # print("Removed edges", datetime.now() - time)
+        for edge in both[i][1]:
+            removed_edges.add(edge)
+
+    sc.stop()
     return mst, removed_edges
 
 
-def remove_edges(E, removed_edges, msts):
+def remove_edges(E, removed_edges):
     """
     Removes the edges, which are removed when generating msts
     :param E: current edges
@@ -231,22 +239,13 @@ def remove_edges(E, removed_edges, msts):
     :param msts: edges in the msts
     :return: return the updated edge dict
     """
-    for removed_edge in removed_edges:
-        for edge in removed_edge:
-            if edge[1] in E[edge[0]]:
-                del E[edge[0]][edge[1]]
-            if edge[0] in E[edge[1]]:
-                del E[edge[1]][edge[0]]
-        for mst in msts:
-            for edge in mst:
-                if edge[1] not in E[edge[0]]:
-                    E[edge[0]][edge[1]] = edge[2]
-                if edge[0] not in E[edge[1]]:
-                    E[edge[1]][edge[0]] = edge[2]
+    for edge in removed_edges:
+        if edge[1] in E[edge[0]]:
+            del E[edge[0]][edge[1]]
     return E
 
 
-def create_mst(V, E, epsilon, m, size):
+def create_mst(V, E, epsilon, size, vertex_coordinates):
     """
     Creates the mst of the graph G = (V, E).
     As long as the number of edges is greater than n ^(1 + epsilon), the number of edges is reduced
@@ -261,23 +260,23 @@ def create_mst(V, E, epsilon, m, size):
     n = len(V)
     c = math.log(size / n, n)
     while size > np.power(n, 1 + epsilon):
+        print("C: ", c)
         mst, removed_edges = reduce_edges(V, E, c, epsilon)
-        E = remove_edges(E, removed_edges, mst)
-        size_removed_edges = 0
-        for i in removed_edges:
-            size_removed_edges += len(i)
-        size = size - size_removed_edges
+        E = remove_edges(E, removed_edges)
+        print("Total edges removed in this iteration", len(removed_edges))
+        size = size - len(removed_edges)
+        print("new size: ", size)
         c = (c - epsilon) / 2
     # Now the number of edges is reduced and can be moved to a single machine
     V = set(range(n))
-    items = E.items() # returns [(x, {y : 1})]
+    items = E.items()  # returns [(x, {y : 1})]
     edges = []
     for item in items:
         items2 = item[1].items()
         for item2 in items2:
             edges.append((item[0], item2[0], item2[1]))
     mst, removed_edges = find_mst(V, V, edges)
-
+    print(len(mst))
     return mst
 
 
@@ -309,7 +308,7 @@ def main():
     """
     parser = ArgumentParser()
     parser.add_argument('--test', help="Used for smaller dataset and testing", action="store_true")
-    parser.add_argument('--epsilon', help="epsilon [default=1/8]", type=float, default=1/8)
+    parser.add_argument('--epsilon', help="epsilon [default=1/8]", type=float, default=1 / 8)
     parser.add_argument('--machines', help="Number of machines [default=1]", type=int, default=1)
     args = parser.parse_args()
 
@@ -322,24 +321,21 @@ def main():
 
     # create_mst()
     datasets = get_clustering_data()
-    cnt = 0
     for dataset in datasets:
         timestamp = datetime.now()
         print("Start creating Distance Matrix...")
-        dm, E, size, vertices_coordinates = create_distance_matrix(dataset[0][0])
+        dm, E, size, vertex_coordinates = create_distance_matrix(dataset[0][0])
         V = list(range(len(dm)))
         print("Size dataset: ", len(dm))
         print("Created distance matrix in: ", datetime.now() - timestamp)
         print("Start creating MST...")
         timestamp = datetime.now()
-        mst = create_mst(V, E, epsilon=args.epsilon, m=args.machines, size=size)
-        print("Created MST in: ", datetime.now() - timestamp)
-        #print("MST:\n", mst)
+        mst = create_mst(V, E, epsilon=args.epsilon, size=size, vertex_coordinates=vertex_coordinates)
+        print("Found MST in: ", datetime.now() - timestamp)
         print("Start creating plot of MST...")
         timestamp = datetime.now()
         plot_mst(dataset[0][0], mst)
         print("Created plot of MST in: ", datetime.now() - timestamp)
-
 
     print("Done...")
 
