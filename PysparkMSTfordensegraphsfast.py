@@ -238,7 +238,6 @@ def remove_edges(E, removed_edges):
     Removes the edges, which are removed when generating msts
     :param E: current edges
     :param removed_edges: edges to be removed
-    :param msts: edges in the msts
     :return: return the updated edge dict
     """
     for edge in removed_edges:
@@ -252,10 +251,11 @@ def create_mst(V, E, epsilon, size, vertex_coordinates, plot_itermediate=False):
     Creates the mst of the graph G = (V, E).
     As long as the number of edges is greater than n ^(1 + epsilon), the number of edges is reduced
     Then the edges that needs to be removed are removed from E and the size is updated.
+    :param plot_itermediate: boolean to indicate if intermediate steps should be plotted
+    :param vertex_coordinates: coordinates of vertices
     :param V: Vertices
     :param E: edges
     :param epsilon:
-    :param m: number of machines
     :param size: number of edges
     :return: returns the reduced graph with at most np.power(n, 1 + epsilon) edges
     """
@@ -283,19 +283,22 @@ def create_mst(V, E, epsilon, size, vertex_coordinates, plot_itermediate=False):
     return mst
 
 
-def plot_mst(vertices, mst, intermediate=False, plot_cluster=False):
+def plot_mst(vertices, mst, intermediate=False, plot_cluster=False, num_clusters=2):
     x = []
     y = []
     c = []
     area = []
-    colors = ["g", "b", "r", "c", "m", "y", "k", "darkorange", "dodgerblue", "deeppink", "khaki", "purple",
+    colors = ["b", "r", "g", "c", "m", "y", "k", "darkorange", "dodgerblue", "deeppink", "khaki", "purple",
               "springgreen", "tomato", "slategray"]
+
     for i in range(len(vertices)):
         x.append(float(vertices[i][0]))
         y.append(float(vertices[i][1]))
         area.append(0.1)
-        c.append("black")
-    plt.scatter(x, y, c=c, s=area)
+        c.append("k")
+
+    if not plot_cluster:
+        plt.scatter(x, y, c=c, s=area)
     if intermediate:
         cnt = 0
         for m in mst:
@@ -307,16 +310,90 @@ def plot_mst(vertices, mst, intermediate=False, plot_cluster=False):
                 plt.plot(linex, liney, colors[cnt])
             cnt = (cnt + 1) % len(colors)
     else:
-        # TODO
         if plot_cluster:
             edges = sorted(mst, key=get_key, reverse=True)
-            total_length = 0
+            removed_edges = []
+            clusters = []
+            for i in range(num_clusters - 1):
+                edge = edges.pop(0)
+                removed_edges.append(edge)
+                clusters.append([edge[0]])
+                clusters.append([edge[1]])
+                linex = [float(x[edge[0]])]
+                liney = [float(y[edge[0]])]
+                linex.append(float(x[edge[1]]))
+                liney.append(float(y[edge[1]]))
+                plt.plot(linex, liney, "k")
+
+            dict_edges = dict()
             for edge in edges:
-                total_length += edge[2]
-            average_length = total_length / len(edges)
-            print(average_length)
-            print(edges[0], edges[1], edges[2], edges[3])
-            print("Not yet implemented")
+                if edge[0] in dict_edges:
+                    dict_edges[edge[0]].append(edge[1])
+                else:
+                    dict_edges[edge[0]] = [edge[1]]
+
+            i = 0
+            while i < len(clusters):
+                pop = False
+                for j in range(i):
+                    if clusters[i][0] in clusters[j]:
+                        clusters.pop(i)
+                        pop = True
+                        break
+                if pop:
+                    continue
+
+                todo = []
+                for j in range(clusters[i][0]):
+                    if j in dict_edges:
+                        if clusters[i][0] in dict_edges[j]:
+                            clusters[i].append(j)
+                            todo.append(j)
+                if clusters[i][0] in dict_edges:
+                    for j in range(len(dict_edges[clusters[i][0]])):
+                        todo.append(dict_edges[clusters[i][0]][j])
+                        clusters[i].append(dict_edges[clusters[i][0]][j])
+
+                while len(todo) > 0:
+                    first = todo.pop()
+                    for k in range(first):
+                        if k in dict_edges:
+                            if first in dict_edges[k] and k not in clusters[i]:
+                                clusters[i].append(k)
+                                todo.append(k)
+                    if first in dict_edges:
+                        for k in range(len(dict_edges[first])):
+                            if dict_edges[first][k] not in clusters[i]:
+                                clusters[i].append(dict_edges[first][k])
+                                todo.append(dict_edges[first][k])
+                i += 1
+            for i in range(len(clusters)):
+                clusters[i] = sorted(clusters[i])
+
+            x_cluster = []
+            y_cluster = []
+            c_cluster = []
+            area_cluster = []
+
+            for i in range(len(clusters)):
+                for vertex in clusters[i]:
+                    x_cluster.append(float(vertices[vertex][0]))
+                    y_cluster.append(float(vertices[vertex][1]))
+                    area_cluster.append(0.2)
+                    c_cluster.append(colors[i])
+            plt.scatter(x=x_cluster, y=y_cluster, c=c_cluster, s=area_cluster)
+
+            for i in range(len(mst)):
+                if mst[i] in removed_edges:
+                    continue
+                linex = [float(x[int(mst[i][0])])]
+                liney = [float(y[int(mst[i][0])])]
+                linex.append(float(x[int(mst[i][1])]))
+                liney.append(float(y[int(mst[i][1])]))
+                for j in range(len(clusters)):
+                    if mst[i][0] in clusters[j]:
+                        plt.plot(linex, liney, c=colors[j])
+
         else:
             for i in range(len(mst)):
                 linex = [float(x[int(mst[i][0])])]
@@ -345,8 +422,10 @@ def main():
     start_time = datetime.now()
     print("Starting time:", start_time)
 
-    # create_mst()
     datasets = get_clustering_data()
+    num_clusters = [2, 2, 3, 3, 3, 2]
+    count = 0
+    time = []
     for dataset in datasets:
         timestamp = datetime.now()
         print("Start creating Distance Matrix...")
@@ -356,15 +435,19 @@ def main():
         print("Created distance matrix in: ", datetime.now() - timestamp)
         print("Start creating MST...")
         timestamp = datetime.now()
-        mst = create_mst(V, E, epsilon=args.epsilon, size=size, vertex_coordinates=vertex_coordinates)
+        mst = create_mst(V, E, epsilon=args.epsilon, size=size, vertex_coordinates=vertex_coordinates,
+                         plot_itermediate=False)
         print("Found MST in: ", datetime.now() - timestamp)
+        time.append(datetime.now() - timestamp)
         print("Start creating plot of MST...")
         timestamp = datetime.now()
-        plot_mst(dataset[0][0], mst, False, False)
+        # plot_mst(vertex_coordinates, mst, False, False, num_clusters[count])
         print("Created plot of MST in: ", datetime.now() - timestamp)
+        count += 1
 
     print("Done...")
-
+    for t in time:
+        print("Dataset generation took:", t)
 
 if __name__ == '__main__':
     # Initial call to main function
