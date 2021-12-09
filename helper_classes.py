@@ -28,6 +28,10 @@ class Edge:
     def contains_vertex(self: 'Edge', vertex: Vertex):
         return self.start_node.equals(vertex) or self.end_node.equals(vertex)
 
+    # If the given vertex is a vertex beloning to the edge, the end_node will still be returned
+    def get_other_Vertex(self: 'Edge', vertex: Vertex):
+        return self.start_node if self.end_node.equals(vertex) else self.end_node
+
 
 # from collections import namedtuple
 

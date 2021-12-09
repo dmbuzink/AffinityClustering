@@ -1,15 +1,38 @@
 from typing import Dict, List, Tuple
 from helper_classes import Vertex, Edge
+from pyspark import SparkConf, SparkContext, RDD
 
 
 def get_mst(V: List[Vertex], E: List[Edge]):
     # V is a set of vertices structured as an array of (x, y)
     # E is a set of edges structured as an array of ((x,y), (x,y))
+
+    data = []
+
+    sparkConf = SparkConf().setAppName('BoruvkaMST')
+    sparkContext = SparkContext(conf=sparkConf)
+    sparkContext
+    
+    distData = sparkContext.parallelize(data)
+    distData.map()
+
     return
+
+# FindBestNeighbors-MPC implementation using PySpark
+def find_best_neighbors_mpc(V: List[Vertex], E: List[Edge]) -> Tuple[Vertex, Vertex]:
+    sparkConf = SparkConf().setAppName('BoruvkaMST_FindBestNeighbors')
+    sparkContext = SparkContext(conf=sparkConf)
+    data = []
+    map_rdd = sparkContext.parallelize(data).map(lambda x: find_best_neighbors_map(x)) # key and values?
+    red_rdd = map_rdd.reduceByKey(lambda x: find_best_neighbors_red(x))
+    
+
+    return red_rdd.collect()
+
 
 
 # FindBestNeighbors-MPC map procedure
-def find_best_neighbors_map(vertex: Vertex, neighbors: List[Edge]):
+def find_best_neighbors_map(vertex: Vertex, neighbors: List[Edge]) -> Tuple[Vertex, List[Edge]]:
     leader = vertex
     if len(neighbors) > 0:
         leader = get_minimum_weight_vertex_of_neighbors(neighbors)
@@ -49,14 +72,26 @@ def contraction_map(vertex: Vertex, neighbors: List[Edge]) -> Tuple[Vertex, List
 # Contraction-MPC red
 # Current version is not yet correct! (atleast I don't think so)
 def contraction_red(vertex: Vertex, neigborsLists: List[List[Edge]]) -> Tuple[Vertex, List[Edge]]:
-    kept_edges = List[Edge]
-    for i in range(0, len(neigborsLists)):
-        neighbors: List[Edge] = neigborsLists[i]
-        for j in range(0, len(neighbors)):
-            current_edge = neighbors[j]
-            if(current_edge.contains_vertex(vertex) and not list_of_edges_contains_equal_edge(kept_edges, current_edge)): # Contains leader and edge is not already in list (but mirrored)
-                kept_edges.append(current_edge)
-    return (vertex, kept_edges)
+    # OLD CODE:
+    # kept_edges = List[Edge]
+    # for i in range(0, len(neigborsLists)):
+    #     neighbors: List[Edge] = neigborsLists[i]
+    #     for j in range(0, len(neighbors)):
+    #         current_edge = neighbors[j]
+    #         if(current_edge.contains_vertex(vertex) and not list_of_edges_contains_equal_edge(kept_edges, current_edge)): # Contains leader and edge is not already in list (but mirrored)
+    #             kept_edges.append(current_edge)
+    # return (vertex, kept_edges)
+
+    # NEW CODE:    
+    # Idea:
+    # Get distinct edges
+    # Keep only edges for non-inner vertices
+    distinct_edges = get_unique_edges(flat_map_edges(neigborsLists))
+
+
+
+
+
 
 
 def list_of_edges_contains_equal_edge(edges: List[Edge], edge: Edge):
@@ -65,9 +100,62 @@ def list_of_edges_contains_equal_edge(edges: List[Edge], edge: Edge):
        if current_edge.equals(edge):
            return True
     return False
+
+def get_unique_edges(edges: List[Edge]):
+    unique_edges = []
+    for i in range(len(edges)):
+        current_edge = edges[i]
+        if not list_of_edges_contains_equal_edge(unique_edges, current_edge):
+            unique_edges.append(current_edge)
+    return edges
+
+def flat_map_edges(list_of_edges: List[List[Edge]]):
+    for i in range(len(list_of_edges)):
+        edges = list_of_edges[i]
+        for j in range(len(edges)):
+            yield j
+
+def get_outer_vertices(distinct_edges: List[Edge]):
+    inner_vertices = []
+    return
+
+def contract_vertex(primary_vertex: Vertex, edges: List[Edge]) -> List[Edge]:
+    leader = dht_get_leader_of_vertex(primary_vertex)
+
+    directly_connected_vertices = []
+    for i in range(len(edges)):
+        current_edge = edges[i]
+        if current_edge.contains_vertex(primary_vertex):
+            vertex_to_add = current_edge.get_other_Vertex(primary_vertex)
+            if dht_get_leader_of_vertex(vertex_to_add).equals(leader):
+                directly_connected_vertices.append(vertex_to_add)
+
+    new_edges = []
+    for i in range(len(edges)):
+        current_edge = edges[i]
+        for j in range(len(directly_connected_vertices)):
+            dc_vertex = directly_connected_vertices[j]
+            # primary_vertex -> dc_vertex -> (weight W) other vertex
+            # store new edge: primary_vertex -> other vertex | with weight W
+            if current_edge.contains_vertex(dc_vertex) and not current_edge.contains_vertex(primary_vertex):
+                new_edges.append(Edge(start_node=primary_vertex, end_node=current_edge.get_other_Vertex(primary_vertex), weight=current_edge.weight))
+            # primary_vertex -> other vertex
+            # keep edge
+            elif not current_edge.contains_vertex(dc_vertex):
+                new_edges.append(current_edge)
+            # Else
+            # primary_vertex -> dc_vertex -> primary_vertex
+            # remove edge
+
+
+
     
     
 def dht_get_nearest_neighbor(vertex) -> Vertex:
+    # DHT stuff
+    return vertex
+
+def dht_get_leader_of_vertex(vertex) -> Vertex:
     # DHT stuff
     return vertex
     
