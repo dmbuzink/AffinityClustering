@@ -72,26 +72,7 @@ def contraction_map(vertex: Vertex, neighbors: List[Edge]) -> Tuple[Vertex, List
 # Contraction-MPC red
 # Current version is not yet correct! (atleast I don't think so)
 def contraction_red(vertex: Vertex, neigborsLists: List[List[Edge]]) -> Tuple[Vertex, List[Edge]]:
-    # OLD CODE:
-    # kept_edges = List[Edge]
-    # for i in range(0, len(neigborsLists)):
-    #     neighbors: List[Edge] = neigborsLists[i]
-    #     for j in range(0, len(neighbors)):
-    #         current_edge = neighbors[j]
-    #         if(current_edge.contains_vertex(vertex) and not list_of_edges_contains_equal_edge(kept_edges, current_edge)): # Contains leader and edge is not already in list (but mirrored)
-    #             kept_edges.append(current_edge)
-    # return (vertex, kept_edges)
-
-    # NEW CODE:    
-    # Idea:
-    # Get distinct edges
-    # Keep only edges for non-inner vertices
-    distinct_edges = get_unique_edges(flat_map_edges(neigborsLists))
-
-
-
-
-
+    return (vertex, contract_vertex(neigborsLists))
 
 
 def list_of_edges_contains_equal_edge(edges: List[Edge], edge: Edge):
@@ -101,6 +82,7 @@ def list_of_edges_contains_equal_edge(edges: List[Edge], edge: Edge):
            return True
     return False
 
+
 def get_unique_edges(edges: List[Edge]):
     unique_edges = []
     for i in range(len(edges)):
@@ -109,15 +91,13 @@ def get_unique_edges(edges: List[Edge]):
             unique_edges.append(current_edge)
     return edges
 
+
 def flat_map_edges(list_of_edges: List[List[Edge]]):
     for i in range(len(list_of_edges)):
         edges = list_of_edges[i]
         for j in range(len(edges)):
             yield j
 
-def get_outer_vertices(distinct_edges: List[Edge]):
-    inner_vertices = []
-    return
 
 def contract_vertex(primary_vertex: Vertex, edges: List[Edge]) -> List[Edge]:
     leader = dht_get_leader_of_vertex(primary_vertex)
@@ -129,6 +109,9 @@ def contract_vertex(primary_vertex: Vertex, edges: List[Edge]) -> List[Edge]:
             vertex_to_add = current_edge.get_other_Vertex(primary_vertex)
             if dht_get_leader_of_vertex(vertex_to_add).equals(leader):
                 directly_connected_vertices.append(vertex_to_add)
+
+    if len(directly_connected_vertices) == 0:
+        return edges
 
     new_edges = []
     for i in range(len(edges)):
@@ -146,14 +129,14 @@ def contract_vertex(primary_vertex: Vertex, edges: List[Edge]) -> List[Edge]:
             # Else
             # primary_vertex -> dc_vertex -> primary_vertex
             # remove edge
-
-
-
+    
+    return contract_vertex(primary_vertex, new_edges)
     
     
 def dht_get_nearest_neighbor(vertex) -> Vertex:
     # DHT stuff
     return vertex
+
 
 def dht_get_leader_of_vertex(vertex) -> Vertex:
     # DHT stuff
