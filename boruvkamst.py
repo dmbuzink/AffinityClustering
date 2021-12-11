@@ -11,6 +11,7 @@ def get_mst(V: List[Vertex], E: List[Edge]):
 
     sparkConf = SparkConf().setAppName('BoruvkaMST')
     sparkContext = SparkContext(conf=sparkConf)
+    
     sparkContext
     
     distData = sparkContext.parallelize(data)
@@ -131,14 +132,20 @@ def contract_vertex(primary_vertex: Vertex, edges: List[Edge]) -> List[Edge]:
             # remove edge
     
     return contract_vertex(primary_vertex, new_edges)
-    
-    
+
+
+nearest_neighbor_dict = {}
+
 def dht_get_nearest_neighbor(vertex) -> Vertex:
-    # DHT stuff
-    return vertex
+    return nearest_neighbor_dict[vertex.id]
 
+def dht_add_nearest_neighbor(vertex: Vertex, nearest_neighbour: Vertex):
+    nearest_neighbor_dict[vertex.id] = nearest_neighbour
 
-def dht_get_leader_of_vertex(vertex) -> Vertex:
-    # DHT stuff
-    return vertex
+leader_dict = {}
+
+def dht_get_leader_of_vertex(vertex: Vertex) -> Vertex:
+    return leader_dict[vertex.id]
     
+def dht_add_leader_of_vertex(key_vertex: Vertex, leader_vertex: Vertex):
+    leader_dict[key_vertex.id] = leader_vertex
