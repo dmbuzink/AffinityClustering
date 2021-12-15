@@ -34,6 +34,9 @@ class Vertex:
     def equals(self, other: 'Vertex') -> bool:
         return self.x == other.x and self.y == other.y
 
+    def copy(self) -> 'Vertex':
+        return Vertex(self.index, self.x, self.y)
+
 class Graph:
     """
     A weighted, undirected graph.
