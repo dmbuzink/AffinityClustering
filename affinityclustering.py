@@ -84,7 +84,7 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
 
     overall_leaders: List[Dict[int, int]] = []
     # Initially, each vertex belongs to its own cluster
-    overall_leaders.append({v: v for v in G.V})
+    overall_leaders.append({v.index: v.index for v in G.V})
     num_leaders = len(G.V)
 
     while num_leaders > k:
@@ -136,7 +136,8 @@ def find_best_neighbours(E: RDD) -> Dict[int, int]:
             return (index, min(neighbours, key=neighbours.get))
 
     # Return the dictionary {v: Λ(v), u: Λ(u), ...}
-    return dict(E.map(closest_neighbour).collect())
+    result = dict(E.map(closest_neighbour).collect())
+    return result
 
 def contract_graph(E: RDD, b_neighbours: Broadcast) -> Tuple[RDD, Dict[int, int]]:
     """
@@ -149,7 +150,7 @@ def contract_graph(E: RDD, b_neighbours: Broadcast) -> Tuple[RDD, Dict[int, int]
 
     b_neightbours (`Broadcast[Dict[int, int]]`) : Mapping of vertices to their best neighbour.
 
-    Returns
+    Returns 
     -------
 
     (`RDD[Tuple[int, Dict[int, float]]]`) The edges of the contracted graph.
@@ -205,7 +206,7 @@ def contract_graph(E: RDD, b_neighbours: Broadcast) -> Tuple[RDD, Dict[int, int]
                     # Replace edge (s, t) by (leader(s), leader(t))
                     weight = edges[s].pop(t)
                     leader_t = leaders.value[t]
-                    if leader_t in edges[s]:
+                    if leader_t in edges[leader]:
                         current = edges[leader][leader_t]
                         edges[leader][leader_t] = min(current, weight)
                     else:
@@ -222,7 +223,8 @@ def contract_graph(E: RDD, b_neighbours: Broadcast) -> Tuple[RDD, Dict[int, int]
     leaders_rdd = E.map(mu)
     # Create mapping of vertices to leader
     leaders: Dict[int, int] = {}
-    for (c, (v, n)) in leaders_rdd.collect():
+    temp = leaders_rdd.collect()
+    for (c, (v, n)) in temp:
         leaders[v] = c
     b_leaders = spark.broadcast(leaders)
 
@@ -230,6 +232,40 @@ def contract_graph(E: RDD, b_neighbours: Broadcast) -> Tuple[RDD, Dict[int, int]
     result = leaders_rdd.groupByKey().map(get_rho(b_leaders))
 
     return (result, leaders)
+
+def get_cluster_class(G: Graph, overall_leaders: List[Dict[int, int]]) -> np.ndarray:
+    """
+    Calculates the class index vector for all vertices.
+
+    Parameters
+    ----------
+
+    G : The graph.
+
+    overall_leaders : The leaders at each level.
+
+    Returns
+    -------
+
+    The class index vector for all vertices.
+    """
+
+    n = len(G.V)
+    # Each vertex is its own leader initially
+    classes = [i for i in range(n)]
+
+    # The number of leaders on the last level
+    last_leaders = list(set(overall_leaders[-1].values()))
+    leader_to_class = {l: last_leaders.index(l) for l in last_leaders}
+
+    for i in range(len(overall_leaders)):
+        leaders = overall_leaders[i]
+        for (v, l) in leaders.items():
+            for j in range(len(classes)):
+                if classes[j] == v:
+                    classes[j] = l
+    
+    return np.array(list(map(lambda n: leader_to_class[n], classes)))
 
 
 def main() -> None:
@@ -239,14 +275,16 @@ def main() -> None:
     G = Graph.create_from_points(datasets[0], threshold=10, noise_points=noise_points)
 
     result_G, overall_leaders = perform_clustering(G, 3)
+    result_y = get_cluster_class(G, overall_leaders)
     # result_G = G
 
     nx_graph = result_G.get_networkx_graph()
 
     data_X, data_y = datasets[0]
-    fig, (ax_pts, ax_graph) = plt.subplots(2)
+    fig, (ax_pts, ax_cluster) = plt.subplots(2)
     ax_pts.scatter(data_X[:, 0], data_X[:, 1], marker="o", c=data_y, s=25)
-    nx.draw(nx_graph, pos=result_G.get_node_pos_as_dict(), ax=ax_graph, with_labels=True)
+    # nx.draw(nx_graph, pos=result_G.get_node_pos_as_dict(), ax=ax_graph, with_labels=True)
+    ax_cluster.scatter(data_X[:, 0], data_X[:, 1], marker="o", c=result_y, s=25)
 
     plt.show()
 
