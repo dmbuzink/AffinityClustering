@@ -49,7 +49,7 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray]]:
 
     return datasets
 
-def compute_mst(G: Graph) -> Graph:
+def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
     """
     Computes the MST of a graph.
 
@@ -60,14 +60,17 @@ def compute_mst(G: Graph) -> Graph:
 
     G : The graph to compute the MST for.
 
+    k : The number of clusters to return.
+
     Returns
     -------
 
     The MST of `G` as a `Graph`.
 
+    The leaders of each level.
+
     """
 
-    # Access the global spark variable
     global spark
 
     # Initialize spark context
@@ -77,21 +80,33 @@ def compute_mst(G: Graph) -> Graph:
     # Parallelize the edge list, which is enough to do calculations on the graph
     E = spark.parallelize(G.E.items())
 
-    # Compute best neighbours for each vertex
-    neighbours = find_best_neighbours(E)
-    # Broadcast best neighbour mapping so it is available to all workers
-    b_neighbours = spark.broadcast(neighbours)
-    
-    # Perform contraction of graph
-    E_result = contract_graph(E, b_neighbours)
+    overall_leaders: List[Dict[int, int]] = []
+    # Initially, each vertex belongs to its own cluster
+    overall_leaders.append({v: v for v in G.V})
+    num_leaders = len(G.V)
 
-    result_edges = dict(E_result.collect())
+    while num_leaders > k:
+        # Compute best neighbours for each vertex
+        neighbours = find_best_neighbours(E)
+        # Broadcast best neighbour mapping so it is available to all workers
+        b_neighbours = spark.broadcast(neighbours)
+        
+        # Perform contraction of graph
+        E_result, leaders = contract_graph(E, b_neighbours)
+
+        # Add leader mapping to list
+        overall_leaders.append(leaders)
+        num_leaders = len(set(leaders.values()))
+
+        E = E_result
+
+    result_edges = dict(E.collect())
     result_vertices = [G.V[i].copy() for i in list(result_edges.keys())]
     result_graph = Graph(result_vertices, result_edges)
 
     spark.stop()
 
-    return result_graph
+    return result_graph, overall_leaders
 
 
 def find_best_neighbours(E: RDD) -> Dict[int, int]:
@@ -121,7 +136,7 @@ def find_best_neighbours(E: RDD) -> Dict[int, int]:
     # Return the dictionary {v: Λ(v), u: Λ(u), ...}
     return dict(E.map(closest_neighbour).collect())
 
-def contract_graph(E: RDD, b_neighbours: Broadcast) -> RDD:
+def contract_graph(E: RDD, b_neighbours: Broadcast) -> Tuple[RDD, Dict[int, int]]:
     """
     Contracts the graph.
 
@@ -136,6 +151,8 @@ def contract_graph(E: RDD, b_neighbours: Broadcast) -> RDD:
     -------
 
     (`RDD[Tuple[int, Dict[int, float]]]`) The edges of the contracted graph.
+
+    (`Dict[int, int]`) The leaders calculated during this contraction.
     """
 
     global spark
@@ -154,7 +171,7 @@ def contract_graph(E: RDD, b_neighbours: Broadcast) -> RDD:
 
         return (c, (vertex, neighbours))
     
-    def get_rho(leaders: Dict[int, int]):
+    def get_rho(leaders: Broadcast):
         
         def rho(pair: Tuple[int, List[Tuple[int, Dict[int, float]]]]) -> Tuple[int, Dict[int, float]]:
 
@@ -185,7 +202,7 @@ def contract_graph(E: RDD, b_neighbours: Broadcast) -> RDD:
                 for t in list(edges[s].keys()):
                     # Replace edge (s, t) by (leader(s), leader(t))
                     weight = edges[s].pop(t)
-                    leader_t = leaders[t]
+                    leader_t = leaders.value[t]
                     if leader_t in edges[s]:
                         current = edges[leader][leader_t]
                         edges[leader][leader_t] = min(current, weight)
@@ -199,15 +216,18 @@ def contract_graph(E: RDD, b_neighbours: Broadcast) -> RDD:
         
         return rho
 
-    # return E.map(mu).groupByKey().map(rho)
+    # Map each vertex to its leader
     leaders_rdd = E.map(mu)
     # Create mapping of vertices to leader
-    leaders_collect = leaders_rdd.collect()
-    leaders = {}
-    for (c, (v, n)) in leaders_collect:
+    leaders: Dict[int, int] = {}
+    for (c, (v, n)) in leaders_rdd.collect():
         leaders[v] = c
+    b_leaders = spark.broadcast(leaders)
+
     # Pass leader mapping to reduce step
-    return leaders_rdd.groupByKey().map(get_rho(leaders))
+    result = leaders_rdd.groupByKey().map(get_rho(b_leaders))
+
+    return (result, leaders)
 
 
 def main() -> None:
@@ -216,7 +236,7 @@ def main() -> None:
 
     G = Graph.create_from_points(datasets[0], threshold=10)
 
-    result_G = compute_mst(G)
+    result_G, overall_leaders = perform_clustering(G, 3)
     # result_G = G
 
     nx_graph = result_G.get_networkx_graph()
