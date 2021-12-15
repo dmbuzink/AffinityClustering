@@ -12,6 +12,8 @@ from pyspark import SparkConf, SparkContext, RDD, Broadcast, AccumulatorParam
 
 from helpers.graph import *
 
+import noisegenerator as noisegen
+
 # Store the SparkContext as a global variable
 spark: SparkContext = None
 
@@ -40,7 +42,7 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray]]:
     """
 
     # The number of points in each dataset
-    n_samples: int = 10
+    n_samples: int = 150
     datasets: List[Tuple[np.ndarray, np.ndarray]] = []
 
     blobs: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8)
@@ -231,10 +233,10 @@ def contract_graph(E: RDD, b_neighbours: Broadcast) -> Tuple[RDD, Dict[int, int]
 
 
 def main() -> None:
-
     datasets = create_datasets()
+    noise_points = noisegen.generate_horizontal_line_equal_dist(25)
 
-    G = Graph.create_from_points(datasets[0], threshold=10)
+    G = Graph.create_from_points(datasets[0], threshold=10, noise_points=noise_points)
 
     result_G, overall_leaders = perform_clustering(G, 3)
     # result_G = G
