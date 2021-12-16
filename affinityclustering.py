@@ -198,7 +198,7 @@ def merge_clusters(G: Graph, edges: Dict[int, Dict[int, int]], overall_leaders: 
 
     return result_graph, overall_leaders
 
-def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
+def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int], int]]:
     """
     Computes the MST of a graph.
 
@@ -235,7 +235,11 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
     overall_leaders.append({v.index: v.index for v in G.V})
     num_leaders = len(G.V)
 
+    number_of_iterations = 0
+
     while num_leaders > k:
+        number_of_iterations += 1
+
         # Compute best neighbours for each vertex
         neighbours = find_best_neighbours(E)
         # Broadcast best neighbour mapping so it is available to all workers
@@ -267,7 +271,7 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
 
     spark.stop()
 
-    return result_graph, overall_leaders
+    return result_graph, overall_leaders, number_of_iterations
 
 
 def find_best_neighbours(E: RDD) -> Dict[int, int]:
@@ -431,7 +435,7 @@ def main() -> None:
     datasets = create_datasets()
     # noise_points = noisegen.generate_horizontal_line_equal_dist(25)
 
-    times: List[Tuple[float, float]] = []
+    peformance_results: List[Tuple[float, float, int]] = []
 
     dataset_count = 0
     for (data_X, data_y, n_classes) in datasets:
@@ -441,13 +445,13 @@ def main() -> None:
         # Record start time
         start_time = time.time()
 
-        result_G, overall_leaders = perform_clustering(G, n_classes)
+        result_G, overall_leaders, number_of_iterations = perform_clustering(G, n_classes)
         result_y = get_cluster_class(G, overall_leaders)
         
         # Record end time
         end_time = time.time()
 
-        times.append((start_time, end_time))
+        peformance_results.append((start_time, end_time, number_of_iterations))
 
         fig, (ax_data, ax_result) = plt.subplots(nrows=2, ncols=1)
         fig.suptitle(f"Dataset {dataset_count}", fontsize=16, )
@@ -459,8 +463,8 @@ def main() -> None:
 
         dataset_count += 1
 
-    for i in range(len(times)):
-        print(f"Elapsed time for dataset {i}: {times[i]} : {times[i][1] - times[i][0]}")
+    for i in range(len(peformance_results)):
+        print(f"Elapsed time for dataset {i}: {peformance_results[i]} : {peformance_results[i][1] - peformance_results[i][0]} | number of iterations: {peformance_results[i][2]}")
 
     plt.show()
 
