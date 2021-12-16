@@ -73,7 +73,7 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
 
     # General settings
     n_samples: int = 160
-    n_noise_samples: int = n_samples * 0.05
+    n_noise_samples: int = int(n_samples * 0.05 )
 
     # Blobs settings
     n_classes = 3
@@ -198,7 +198,7 @@ def merge_clusters(G: Graph, edges: Dict[int, Dict[int, int]], overall_leaders: 
 
     return result_graph, overall_leaders
 
-def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int], int]]:
+def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]], int]:
     """
     Computes the MST of a graph.
 
