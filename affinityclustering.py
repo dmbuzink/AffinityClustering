@@ -259,7 +259,8 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]], i
             edges: Dict[int, Dict[int, float]] = dict(E_prev.collect())
             spark.stop()
 
-            return merge_clusters(G, edges, overall_leaders, k)
+            merged_graph, merged_overall_leaders = merge_clusters(G, edges, overall_leaders, k)
+            return (merged_graph, merged_overall_leaders, number_of_iterations)
         else:
             # Continue to next iteration
             E_prev = E
