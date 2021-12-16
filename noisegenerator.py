@@ -20,18 +20,20 @@ def add_gaussian_noise(dataset: Tuple[np.ndarray, np.ndarray], n_samples: int, n
         dataset_y = np.append(dataset_y, [n_classes], axis=0)
     return (dataset_X, dataset_y)
 
-def generate_horizontal_line_equal_dist(amount: int, y: int = 0):
+def generate_horizontal_line_equal_dist(amount: int, y: int = 0, x_range: Tuple[float, float] = (-10, 10)):
     noise_points = []
-    interval_distance = 20 / (amount - 1)
+    x_min, x_max = x_range
+    interval_distance = (x_max - x_min) / (amount - 1)
     for i in range(amount):
-        noise_points.append([i * interval_distance - 10, y])
+        noise_points.append([i * interval_distance + x_min, y])
     return noise_points
 
-def add_horizontal_line_noise(dataset: Tuple[np.ndarray, np.ndarray], n_samples: int, n_classes: int) -> Tuple[np.ndarray, np.ndarray]:
+def add_horizontal_line_noise(dataset: Tuple[np.ndarray, np.ndarray], n_samples: int, n_classes: int, x_range: Tuple[float, float] = (-10, 10)) -> Tuple[np.ndarray, np.ndarray]:
     dataset_x, dataset_y = dataset
-    interval_distance = 20 / (n_samples - 1)
+    x_min, x_max = x_range
+    interval_distance = (x_max - x_min) / (n_samples - 1)
     for i in range(n_samples):
-        point = (i * interval_distance - 10, 0)
+        point = (i * interval_distance + x_min, 0)
         dataset_x = np.append(dataset_x, [point], axis=0)
         dataset_y = np.append(dataset_y, [n_classes], axis=0)
     return (dataset_x, dataset_y)
@@ -45,16 +47,16 @@ def generate_vertical_line_equal_dist(amount: int, x: int = 0):
     return noise_points
 
 
-def add_circle_noise(dataset: Tuple[np.ndarray, np.ndarray], n_samples: int, n_classes: int) -> Tuple[np.ndarray, np.ndarray]:
+def add_circle_noise(dataset: Tuple[np.ndarray, np.ndarray], n_samples: int, n_classes: int, radius: float) -> Tuple[np.ndarray, np.ndarray]:
     dataset_x, dataset_y = dataset
-    point_in_circle = generate_points_in_a_circle(n_samples)
-    for point in enumerate(point_in_circle):
+    point_in_circle = generate_points_in_a_circle(n_samples, radius)
+    for point in point_in_circle:
         dataset_x = np.append(dataset_x, [point], axis=0)
         dataset_y = np.append(dataset_y, [n_classes], axis=0)
     return (dataset_x, dataset_y)
 
 
-def generate_points_in_a_circle(amount: int, radius = 5):
+def generate_points_in_a_circle(amount: int, radius: float = 5):
     return [(math.cos(2 * pi / amount * x) * radius, math.sin(2 * pi / amount * x) * radius) for x in range(0, amount + 1)]
 
 def get_random_point(x_range: Tuple[float, float], y_range: Tuple[float, float]) -> List[float]:

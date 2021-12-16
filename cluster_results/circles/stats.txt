@@ -1,0 +1,9 @@
+Dataset 0 = no noise
+Dataset 1 = gaussian noise
+Dataset 2 = horizontal line noise
+Dataset 3 = circle noise
+
+Elapsed time for dataset 0: (1639688186.8306117, 1639688559.0133216, 7) : 372.18270993232727 | number of iterations: 7
+Elapsed time for dataset 1: (1639688559.20045, 1639688917.381972, 7) : 358.1815221309662 | number of iterations: 7
+Elapsed time for dataset 2: (1639688917.5229719, 1639689273.5045733, 7) : 355.9816014766693 | number of iterations: 7
+Elapsed time for dataset 3: (1639689273.6325748, 1639689623.7201495, 7) : 350.0875747203827 | number of iterations: 7

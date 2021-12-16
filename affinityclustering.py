@@ -94,6 +94,8 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
     blobs_circle = noisegen.add_circle_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes)
     datasets.append((blobs_circle[0], blobs_circle[1], n_classes))
 
+    
+
 
     # Two moons settings
     n_classes = 2
@@ -123,15 +125,15 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
     datasets.append((circles_plain[0], circles_plain[1], n_classes))
 
     # Circles - Gaussian noise
-    circles_gaussian = noisegen.add_gaussian_noise(copy_dataset(circles_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    circles_gaussian = noisegen.add_gaussian_noise(copy_dataset(circles_plain), n_samples=n_noise_samples, n_classes=n_classes, x_range=(-1, 1), y_range=(-1,1))
     datasets.append((circles_gaussian[0], circles_gaussian[1], n_classes))
 
     # Circles - Horizontal line noise
-    circles_horizontal_line = noisegen.add_horizontal_line_noise(copy_dataset(circles_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    circles_horizontal_line = noisegen.add_horizontal_line_noise(copy_dataset(circles_plain), n_samples=n_noise_samples, n_classes=n_classes, x_range=(-1, 1))
     datasets.append((circles_horizontal_line[0], circles_horizontal_line[1], n_classes))
 
     # Circles - Circle noise
-    circles_circle = noisegen.add_circle_noise(copy_dataset(circles_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    circles_circle = noisegen.add_circle_noise(copy_dataset(circles_plain), n_samples=n_noise_samples, n_classes=n_classes, radius=0.9)
     datasets.append((circles_circle[0], circles_circle[1], n_classes))
 
     return datasets
