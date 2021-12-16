@@ -27,7 +27,7 @@ def generate_horizontal_line_equal_dist(amount: int, y: int = 0):
         noise_points.append([i * interval_distance - 10, y])
     return noise_points
 
-def add_horizontal_line_noise(dataset: Tuple[np.ndarray, np.ndarray], n_samples: int, n_classes: int):
+def add_horizontal_line_noise(dataset: Tuple[np.ndarray, np.ndarray], n_samples: int, n_classes: int) -> Tuple[np.ndarray, np.ndarray]:
     dataset_x, dataset_y = dataset
     interval_distance = 20 / (n_samples - 1)
     for i in range(n_samples):
@@ -43,6 +43,15 @@ def generate_vertical_line_equal_dist(amount: int, x: int = 0):
     for i in range(amount):
         noise_points.append([x, i * interval_distance - 1])
     return noise_points
+
+
+def add_circle_noise(dataset: Tuple[np.ndarray, np.ndarray], n_samples: int, n_classes: int) -> Tuple[np.ndarray, np.ndarray]:
+    dataset_x, dataset_y = dataset
+    point_in_circle = generate_points_in_a_circle(n_samples)
+    for point in enumerate(point_in_circle):
+        dataset_x = np.append(dataset_x, [point], axis=0)
+        dataset_y = np.append(dataset_y, [n_classes], axis=0)
+    return (dataset_x, dataset_y)
 
 
 def generate_points_in_a_circle(amount: int, radius = 5):
