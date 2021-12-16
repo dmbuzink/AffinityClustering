@@ -86,7 +86,7 @@ class Graph:
         return {v.index: (v.x, v.y) for v in self.V}
 
     @staticmethod
-    def create_from_points(data: Tuple[np.ndarray, np.ndarray], threshold: float = float("inf"), noise_points: List[Tuple[float, float]] = None) -> 'Graph':
+    def create_from_points(data: Tuple[np.ndarray, np.ndarray], threshold: float = float("inf")) -> 'Graph':
         """
         Builds a graph from a set of points.
 
@@ -104,19 +104,10 @@ class Graph:
         """
         
         points = data[0]
-        # raw_points: List[Tuple[float, float]] = data[0].tolist()
-        # raw_points.extend(noise_points)
-        # points: np.ndarray = np.array(raw_points)
         n = len(points)
 
         # Create a list of vertices for every 2D point in the dataset
         vertices: List[Vertex] = [Vertex(i, points[i][0], points[i][1]) for i in range(n)]
-        
-        # # Add noise points to the list of vertices
-        # for noise_point in enumerate(noise_points):
-        #     vertices.append(Vertex(len(vertices), noise_point[0], noise_point[1]))
-
-
 
         # Compute the distance matrix for the point set
         distances = scipy.spatial.distance_matrix(points, points)

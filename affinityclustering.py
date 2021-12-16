@@ -1,6 +1,8 @@
 from typing import List, Tuple
 from networkx.classes.function import non_edges
 
+import time
+
 import numpy as np
 import networkx as nx
 from numpy.core.fromnumeric import size
@@ -28,7 +30,7 @@ class DictAccumulator(AccumulatorParam):
         dict1.update(dict2)
         return dict1
 
-def create_datasets() -> List[Tuple[np.ndarray, np.ndarray]]:
+def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
     """
     Returns a list of datasets.
     Each dataset consists of a tuple:
@@ -39,15 +41,27 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray]]:
     -------
 
     A list of datasets.
+        Points in 2D space
+        Classes of points
+        Number of expected classes
     """
 
     # The number of points in each dataset
-    n_samples: int = 150
     datasets: List[Tuple[np.ndarray, np.ndarray]] = []
 
-    blobs: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8, centers=7)
+    # Create plain blobs dataset
+    n_samples: int = 150
+    n_classes = 7
+    plain_blobs: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8, centers=n_classes)
+    datasets.append((plain_blobs[0], plain_blobs[1], n_classes))
 
-    datasets.append(blobs)
+    # Create blobs dataset with random gaussian noise
+    n_samples: int = 150
+    n_classes = 3
+    gaussian_noise_blobs: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8, centers=n_classes)
+    gaussian_noise_blobs = noisegen.add_gaussian_noise(gaussian_noise_blobs, n_samples=n_samples, n_classes=n_classes)
+
+    datasets.append((gaussian_noise_blobs[0], gaussian_noise_blobs[1], n_classes))
 
     return datasets
 
@@ -168,7 +182,8 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
         # of clusters
         if num_leaders < k:
             edges: Dict[int, Dict[int, float]] = dict(E_prev.collect())
-            # Careful! We're passing overall_leaders by reference!
+            spark.stop()
+
             return merge_clusters(G, edges, overall_leaders, k)
         else:
             # Continue to next iteration
@@ -345,19 +360,35 @@ def main() -> None:
     datasets = create_datasets()
     # noise_points = noisegen.generate_horizontal_line_equal_dist(25)
 
-    G = Graph.create_from_points(datasets[0], threshold=10)
+    times: List[Tuple[float, float]] = []
 
-    result_G, overall_leaders = perform_clustering(G, 7)
-    result_y = get_cluster_class(G, overall_leaders)
-    # result_G = G
+    dataset_count = 0
+    for (data_X, data_y, n_classes) in datasets:
 
-    nx_graph = result_G.get_networkx_graph()
+        G = Graph.create_from_points((data_X, data_y), threshold=10)
 
-    data_X, data_y = datasets[0]
-    fig, (ax_pts, ax_cluster) = plt.subplots(2)
-    ax_pts.scatter(data_X[:, 0], data_X[:, 1], marker="o", c=data_y, s=25)
-    # nx.draw(nx_graph, pos=result_G.get_node_pos_as_dict(), ax=ax_graph, with_labels=True)
-    ax_cluster.scatter(data_X[:, 0], data_X[:, 1], marker="o", c=result_y, s=25)
+        # Record start time
+        start_time = time.time()
+
+        result_G, overall_leaders = perform_clustering(G, n_classes)
+        result_y = get_cluster_class(G, overall_leaders)
+        
+        # Record end time
+        end_time = time.time()
+
+        times.append((start_time, end_time))
+
+        fig, (ax_data, ax_result) = plt.subplots(2)
+        fig.suptitle(f"Dataset {dataset_count}", fontsize=16)
+        ax_data.set_title("Dataset")
+        ax_data.scatter(data_X[:, 0], data_X[:, 1], marker="o", c=data_y, s=25)
+        ax_result.set_title("Resulting clustering")
+        ax_result.scatter(data_X[:, 0], data_X[:, 1], marker="o", c=result_y, s=25)
+
+        dataset_count += 1
+
+    for i in range(len(times)):
+        print(f"Elapsed time for dataset {i}: {times[i]} : {times[i][1] - times[i][0]}")
 
     plt.show()
 
