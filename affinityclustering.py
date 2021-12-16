@@ -6,6 +6,8 @@ import time
 import numpy as np
 import networkx as nx
 from numpy.core.fromnumeric import size
+from scipy.sparse import data
+from sklearn import datasets
 
 from sklearn.datasets import make_circles, make_moons, make_blobs
 from matplotlib import pyplot as plt
@@ -30,6 +32,11 @@ class DictAccumulator(AccumulatorParam):
         dict1.update(dict2)
         return dict1
 
+def copy_dataset(dataset: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+    dataset_x, dataset_y = dataset
+    return (dataset_x.copy(), dataset_y.copy())
+
+
 def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
     """
     Returns a list of datasets.
@@ -49,19 +56,83 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
     # The number of points in each dataset
     datasets: List[Tuple[np.ndarray, np.ndarray]] = []
 
-    # Create plain blobs dataset
-    n_samples: int = 150
-    n_classes = 7
-    plain_blobs: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8, centers=n_classes)
-    datasets.append((plain_blobs[0], plain_blobs[1], n_classes))
+    # Previous data sets
+    # # Create plain blobs dataset
+    # n_samples: int = 150
+    # n_classes = 7
+    # bobs_plain: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8, centers=n_classes)
+    # datasets.append((bobs_plain[0], bobs_plain[1], n_classes))
 
-    # Create blobs dataset with random gaussian noise
-    n_samples: int = 150
+    # # Create blobs dataset with random gaussian noise
+    # n_samples: int = 150
+    # n_classes = 3
+    # gaussian_noise_blobs: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8, centers=n_classes)
+    # gaussian_noise_blobs = noisegen.add_gaussian_noise(gaussian_noise_blobs, n_samples=n_samples, n_classes=n_classes)
+    # datasets.append((gaussian_noise_blobs[0], gaussian_noise_blobs[1], n_classes))
+
+
+    # General settings
+    n_samples: int = 160
+    n_noise_samples: int = n_samples * 0.05
+
+    # Blobs settings
     n_classes = 3
-    gaussian_noise_blobs: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8, centers=n_classes)
-    gaussian_noise_blobs = noisegen.add_gaussian_noise(gaussian_noise_blobs, n_samples=n_samples, n_classes=n_classes)
 
-    datasets.append((gaussian_noise_blobs[0], gaussian_noise_blobs[1], n_classes))
+    # Blobs - No noise
+    bobs_plain: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8, centers=n_classes)
+    datasets.append((bobs_plain[0], bobs_plain[1], n_classes))
+
+    # Blobs - Gaussian noise
+    blobs_gaussian = noisegen.add_gaussian_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    datasets.append((blobs_gaussian[0], blobs_gaussian[1], n_classes))
+
+    # Blobs - Horizontal line noise
+    blobs_horizontal_line = noisegen.add_horizontal_line_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    datasets.append((blobs_horizontal_line[0], blobs_horizontal_line[1], n_classes))
+
+    # Blobs - Circle noise
+    blobs_circle = noisegen.add_circle_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    datasets.append((blobs_circle[0], blobs_circle[1], n_classes))
+
+
+    # Two moons settings
+    n_classes = 2
+
+    # Two moons - No noise
+    tm_plain = make_moons(n_samples=n_samples, random_state=8)
+    datasets.append((tm_plain[0], tm_plain[1], n_classes))
+
+    # Two moons - Gaussian noise
+    tm_gaussian = noisegen.add_gaussian_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    datasets.append((tm_gaussian[0], tm_gaussian[1], n_classes))
+
+    # Two moons - Horizontal line noise
+    tm_horizontal_line = noisegen.add_horizontal_line_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    datasets.append((tm_horizontal_line[0], tm_horizontal_line[1], n_classes))
+
+    # Two moons - Circle noise
+    tm_circle = noisegen.add_circle_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    datasets.append((tm_circle[0], tm_circle[1], n_classes))
+
+
+    # Circles settings
+    n_classes = 2
+
+    # Circles - No noise
+    circles_plain = make_circles(n_samples=n_samples, random_state=8)
+    datasets.append((circles_plain[0], circles_plain[1], n_classes))
+
+    # Circles - Gaussian noise
+    circles_gaussian = noisegen.add_gaussian_noise(copy_dataset(circles_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    datasets.append((circles_gaussian[0], circles_gaussian[1], n_classes))
+
+    # Circles - Horizontal line noise
+    circles_horizontal_line = noisegen.add_horizontal_line_noise(copy_dataset(circles_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    datasets.append((circles_horizontal_line[0], circles_horizontal_line[1], n_classes))
+
+    # Circles - Circle noise
+    circles_circle = noisegen.add_circle_noise(copy_dataset(circles_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    datasets.append((circles_circle[0], circles_circle[1], n_classes))
 
     return datasets
 
