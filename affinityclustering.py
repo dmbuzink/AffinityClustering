@@ -378,8 +378,9 @@ def main() -> None:
 
         times.append((start_time, end_time))
 
-        fig, (ax_data, ax_result) = plt.subplots(2)
-        fig.suptitle(f"Dataset {dataset_count}", fontsize=16)
+        fig, (ax_data, ax_result) = plt.subplots(nrows=2, ncols=1)
+        fig.suptitle(f"Dataset {dataset_count}", fontsize=16, )
+        fig.tight_layout()
         ax_data.set_title("Dataset")
         ax_data.scatter(data_X[:, 0], data_X[:, 1], marker="o", c=data_y, s=25)
         ax_result.set_title("Resulting clustering")
