@@ -45,11 +45,73 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray]]:
     n_samples: int = 150
     datasets: List[Tuple[np.ndarray, np.ndarray]] = []
 
-    blobs: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8)
+    blobs: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8, centers=7)
 
     datasets.append(blobs)
 
     return datasets
+
+def merge_clusters(G: Graph, edges: Dict[int, Dict[int, int]], overall_leaders: List[Dict[int, int]], k: int) -> Tuple[Graph, List[Dict[int, int]]]:
+    """
+    Continuously merges the closest clusters, until we have k of them.
+    """
+
+    print("Merging.")
+
+    # Remove the last level of leaders
+    overall_leaders.pop()
+    # Calculate the number of leaders on the (now) last level
+    num_leaders = len(set(overall_leaders[-1].values()))
+    # Merge components one-by-one till we have k of them
+    while num_leaders > k:
+        # Find the shortest edge
+        shortest: Tuple[int, int] = None
+        shortest_weight = float("inf")
+        for (s, neighbours) in edges.items():
+            for (t, weight) in neighbours.items():
+                if weight < shortest_weight:
+                    shortest_weight = weight
+                    shortest = (s, t)
+                    
+        # Merge component of t into s where (s, t) = shortest
+        # I.e. have all vertices with edges to t point to s
+
+        # Change leader of vertices
+        # Copy last level
+        new_leaders = dict(overall_leaders[-1])
+        new_leaders[shortest[1]] = shortest[0]
+        for (v, l) in new_leaders.items():
+            if l == shortest[1]:
+                new_leaders[v] = shortest[0]
+        # Add new leaders
+        overall_leaders.append(new_leaders)
+        num_leaders = len(set(new_leaders.values()))
+
+        # Remove edge from shortest[0] to shortest[1]
+        edges[shortest[0]].pop(shortest[1])
+
+        # Delete shortest[1]
+        edges.pop(shortest[1])
+        
+        for (v, neighbours) in edges.items():
+            # Move an edge to shortest[1] from a vertex to shortest[0]
+            if shortest[1] in neighbours:
+                weight = neighbours.pop(shortest[1])
+                # If there already was an edge from v to shortest[0]
+                if shortest[0] in neighbours:
+                    # Replace only if shorter
+                    current = neighbours[shortest[0]]
+                    neighbours[shortest[0]] = min(current, weight)
+                else:
+                    neighbours[shortest[0]] = weight
+                # Keep edges symmetric
+                edges[shortest[0]][v] = edges[v][shortest[0]]
+    
+    # Return graph
+    result_vertices = [G.V[i].copy() for i in list(edges.keys())]
+    result_graph = Graph(result_vertices, edges)
+
+    return result_graph, overall_leaders
 
 def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
     """
@@ -80,6 +142,7 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
     spark = SparkContext(conf=sparkConf)
 
     # Parallelize the edge list, which is enough to do calculations on the graph
+    E_prev: RDD = None
     E = spark.parallelize(G.E.items())
 
     overall_leaders: List[Dict[int, int]] = []
@@ -100,7 +163,17 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
         overall_leaders.append(leaders)
         num_leaders = len(set(leaders.values()))
 
-        E = E_result
+        # We've gone too far, we need to "go back" to the previous step
+        # and merge clusters manually until we get the desired number
+        # of clusters
+        if num_leaders < k:
+            edges: Dict[int, Dict[int, float]] = dict(E_prev.collect())
+            # Careful! We're passing overall_leaders by reference!
+            return merge_clusters(G, edges, overall_leaders, k)
+        else:
+            # Continue to next iteration
+            E_prev = E
+            E = E_result
 
     result_edges = dict(E.collect())
     result_vertices = [G.V[i].copy() for i in list(result_edges.keys())]
@@ -270,11 +343,11 @@ def get_cluster_class(G: Graph, overall_leaders: List[Dict[int, int]]) -> np.nda
 
 def main() -> None:
     datasets = create_datasets()
-    noise_points = noisegen.generate_horizontal_line_equal_dist(25)
+    # noise_points = noisegen.generate_horizontal_line_equal_dist(25)
 
-    G = Graph.create_from_points(datasets[0], threshold=10, noise_points=noise_points)
+    G = Graph.create_from_points(datasets[0], threshold=10)
 
-    result_G, overall_leaders = perform_clustering(G, 3)
+    result_G, overall_leaders = perform_clustering(G, 7)
     result_y = get_cluster_class(G, overall_leaders)
     # result_G = G
 

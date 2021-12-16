@@ -103,9 +103,10 @@ class Graph:
         The graph for the dataset.
         """
         
-        raw_points: List[Tuple[float, float]] = data[0].tolist()
-        raw_points.extend(noise_points)
-        points: np.ndarray = np.array(raw_points)
+        points = data[0]
+        # raw_points: List[Tuple[float, float]] = data[0].tolist()
+        # raw_points.extend(noise_points)
+        # points: np.ndarray = np.array(raw_points)
         n = len(points)
 
         # Create a list of vertices for every 2D point in the dataset
