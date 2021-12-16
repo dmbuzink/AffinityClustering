@@ -86,7 +86,7 @@ class Graph:
         return {v.index: (v.x, v.y) for v in self.V}
 
     @staticmethod
-    def create_from_points(data: Tuple[np.ndarray, np.ndarray], threshold: float = float("inf"), noise_points: List[Tuple[float, float]] = None) -> 'Graph':
+    def create_from_points(data: np.ndarray, threshold: float = float("inf"), noise_points: List[Tuple[float, float]] = None) -> 'Graph':
         """
         Builds a graph from a set of points.
 
@@ -102,10 +102,8 @@ class Graph:
 
         The graph for the dataset.
         """
-        
-        raw_points: List[Tuple[float, float]] = data[0].tolist()
-        raw_points.extend(noise_points)
-        points: np.ndarray = np.array(raw_points)
+
+        points: np.ndarray = data
         n = len(points)
 
         # Create a list of vertices for every 2D point in the dataset
@@ -130,7 +128,7 @@ class Graph:
                 if i == j:
                     continue
                 # Don't add edge if it exceeds the threshold
-                if distances[i][j] > threshold:
+                if distances[i][j] > threshold and False:
                     continue
                 # Add edge
                 outgoing[j] = distances[i][j]

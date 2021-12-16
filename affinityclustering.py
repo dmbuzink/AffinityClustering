@@ -28,7 +28,7 @@ class DictAccumulator(AccumulatorParam):
         dict1.update(dict2)
         return dict1
 
-def create_datasets() -> List[Tuple[np.ndarray, np.ndarray]]:
+def create_datasets(amount: int) -> List[Tuple[np.ndarray, np.ndarray]]:
     """
     Returns a list of datasets.
     Each dataset consists of a tuple:
@@ -42,7 +42,7 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray]]:
     """
 
     # The number of points in each dataset
-    n_samples: int = 150
+    n_samples: int = amount
     datasets: List[Tuple[np.ndarray, np.ndarray]] = []
 
     blobs: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8)
@@ -50,6 +50,18 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray]]:
     datasets.append(blobs)
 
     return datasets
+
+def combine_leader_lists(old_leaders: Dict[int, int], new_leaders: Dict[int, int]):
+    if old_leaders is None:
+        return new_leaders
+
+    for (vertex, leader) in enumerate(old_leaders):
+        leader_of_leader = new_leaders.get(leader)
+        if leader_of_leader is not leader and leader_of_leader != leader:
+            new_leaders[vertex] = leader_of_leader
+    return new_leaders
+
+
 
 def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
     """
@@ -86,6 +98,7 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
     # Initially, each vertex belongs to its own cluster
     overall_leaders.append({v.index: v.index for v in G.V})
     num_leaders = len(G.V)
+    combined_leader_list: Dict[int, int] = None
 
     while num_leaders > k:
         # Compute best neighbours for each vertex
@@ -95,6 +108,7 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
         
         # Perform contraction of graph
         E_result, leaders = contract_graph(E, b_neighbours)
+        combined_leader_list = combine_leader_lists(combined_leader_list, leaders)
 
         # Add leader mapping to list
         overall_leaders.append(leaders)
@@ -109,6 +123,47 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]]]:
     spark.stop()
 
     return result_graph, overall_leaders
+
+def perform_clustering_alt(G: Graph, k: int) -> Tuple[Graph, Dict[int, int]]:
+
+    global spark
+
+    # Initialize spark context
+    sparkConf = SparkConf().setAppName('AffinityClustering')
+    spark = SparkContext(conf=sparkConf)
+
+    # Parallelize the edge list, which is enough to do calculations on the graph
+    E = spark.parallelize(G.E.items())
+
+    overall_leaders: List[Dict[int, int]] = []
+    # Initially, each vertex belongs to its own cluster
+    overall_leaders.append({v.index: v.index for v in G.V})
+    num_leaders = len(G.V)
+    combined_leader_list: Dict[int, int] = None
+
+    while num_leaders > k:
+        # Compute best neighbours for each vertex
+        neighbours = find_best_neighbours(E)
+        # Broadcast best neighbour mapping so it is available to all workers
+        b_neighbours = spark.broadcast(neighbours)
+        
+        # Perform contraction of graph
+        E_result, leaders = contract_graph(E, b_neighbours)
+        combined_leader_list = combine_leader_lists(combined_leader_list, leaders)
+
+        # Add leader mapping to list
+        overall_leaders.append(leaders)
+        num_leaders = len(set(leaders.values()))
+
+        E = E_result
+
+    result_edges = dict(E.collect())
+    result_vertices = [G.V[i].copy() for i in list(result_edges.keys())]
+    result_graph = Graph(result_vertices, result_edges)
+
+    spark.stop()
+
+    return result_graph, leaders
 
 
 def find_best_neighbours(E: RDD) -> Dict[int, int]:
@@ -267,15 +322,31 @@ def get_cluster_class(G: Graph, overall_leaders: List[Dict[int, int]]) -> np.nda
     
     return np.array(list(map(lambda n: leader_to_class[n], classes)))
 
+def combine_dataset_with_noise(dataset_points: np.ndarray, noise_points: List[Tuple[float, float]]) -> np.ndarray:
+    raw_points: List[Tuple[float, float]] = dataset_points[0].tolist()
+    raw_points.extend(noise_points)
+    return np.array(raw_points)
+
+
+def get_distinct_leaders(leader_list: Dict[int, int]):
+    leaders = []
+    for (vertex, leader) in enumerate(leader_list):
+        if not leader_list.__contains__(leader):
+            leaders.append(leader)
+    return leaders
+
 
 def main() -> None:
-    datasets = create_datasets()
+    datasets = create_datasets(50)
     noise_points = noisegen.generate_horizontal_line_equal_dist(25)
 
-    G = Graph.create_from_points(datasets[0], threshold=10, noise_points=noise_points)
+    prepped_dataset:np.ndenumerate = combine_dataset_with_noise(datasets[0], noise_points)
 
-    result_G, overall_leaders = perform_clustering(G, 3)
-    result_y = get_cluster_class(G, overall_leaders)
+    G = Graph.create_from_points(prepped_dataset, threshold=10, noise_points=noise_points)
+
+    # result_G, overall_leaders = perform_clustering(G, 3)
+    result_G, total_leaders = perform_clustering_alt(G, 3)
+    # result_y = get_cluster_class(result_G, overall_leaders)
     # result_G = G
 
     nx_graph = result_G.get_networkx_graph()
@@ -284,7 +355,8 @@ def main() -> None:
     fig, (ax_pts, ax_cluster) = plt.subplots(2)
     ax_pts.scatter(data_X[:, 0], data_X[:, 1], marker="o", c=data_y, s=25)
     # nx.draw(nx_graph, pos=result_G.get_node_pos_as_dict(), ax=ax_graph, with_labels=True)
-    ax_cluster.scatter(data_X[:, 0], data_X[:, 1], marker="o", c=result_y, s=25)
+    ax_cluster.scatter(prepped_dataset[:, 0], prepped_dataset[:, 1], marker="o", c=get_distinct_leaders(total_leaders), s=25)
+    
 
     plt.show()
 
