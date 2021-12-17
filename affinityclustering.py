@@ -17,6 +17,7 @@ from pyspark import SparkConf, SparkContext, RDD, Broadcast, AccumulatorParam
 from helpers.graph import *
 
 import noisegenerator as noisegen
+from sklearn.metrics.cluster import completeness_score
 
 # Store the SparkContext as a global variable
 spark: SparkContext = None
@@ -434,11 +435,22 @@ def get_cluster_class(G: Graph, overall_leaders: List[Dict[int, int]]) -> np.nda
     return np.array(list(map(lambda n: leader_to_class[n], classes)))
 
 
+def get_cluster_completeness_score(groundtruth_clustering: List[int], result_clustering: List[int], noise_cluster_index: int):
+    groundtruth_clustering_no_noise = []
+    result_clustering_no_noise = []
+    for i in range(len(groundtruth_clustering)):
+        if groundtruth_clustering[i] != noise_cluster_index:
+            groundtruth_clustering_no_noise.append(groundtruth_clustering[i])
+            result_clustering_no_noise.append(result_clustering[i])
+
+    return completeness_score(groundtruth_clustering_no_noise, result_clustering_no_noise)
+
+    
 def main() -> None:
     datasets = create_datasets()
     # noise_points = noisegen.generate_horizontal_line_equal_dist(25)
 
-    peformance_results: List[Tuple[float, float, int]] = []
+    performance_results: List[Tuple[float, float, int, float]] = []
 
     dataset_count = 0
     for (data_X, data_y, n_classes) in datasets:
@@ -453,8 +465,9 @@ def main() -> None:
         
         # Record end time
         end_time = time.time()
+        completeness_score = get_cluster_completeness_score(data_y, result_y, max(data_y))
 
-        peformance_results.append((start_time, end_time, number_of_iterations))
+        performance_results.append((start_time, end_time, number_of_iterations, completeness_score))
 
         fig, (ax_data, ax_result) = plt.subplots(nrows=2, ncols=1)
         fig.suptitle(f"Dataset {dataset_count}", fontsize=16, )
@@ -466,8 +479,8 @@ def main() -> None:
 
         dataset_count += 1
 
-    for i in range(len(peformance_results)):
-        print(f"Elapsed time for dataset {i}: {peformance_results[i]} : {peformance_results[i][1] - peformance_results[i][0]} | number of iterations: {peformance_results[i][2]}")
+    for i in range(len(performance_results)):
+        print(f"Elapsed time for dataset {i}: {performance_results[i]} : {performance_results[i][1] - performance_results[i][0]} | number of iterations: {performance_results[i][2]} | completeness score: {performance_results[i][3]}")
 
     plt.show()
 
