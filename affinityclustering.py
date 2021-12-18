@@ -73,7 +73,7 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
 
 
     # General settings
-    n_samples: int = 160
+    n_samples: int = 10000
     n_noise_samples: int = int(n_samples * 0.05 )
 
     # Blobs settings
@@ -92,7 +92,7 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
     datasets.append((blobs_horizontal_line[0], blobs_horizontal_line[1], n_classes))
 
     # Blobs - Circle noise
-    blobs_circle = noisegen.add_circle_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    blobs_circle = noisegen.add_circle_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes, radius=5)
     datasets.append((blobs_circle[0], blobs_circle[1], n_classes))
 
     
@@ -114,7 +114,7 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
     datasets.append((tm_horizontal_line[0], tm_horizontal_line[1], n_classes))
 
     # Two moons - Circle noise
-    tm_circle = noisegen.add_circle_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    tm_circle = noisegen.add_circle_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes, radius=0.7)
     datasets.append((tm_circle[0], tm_circle[1], n_classes))
 
 
@@ -228,6 +228,8 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]], i
     # Initialize spark context
     sparkConf = SparkConf().setAppName('AffinityClustering')
     spark = SparkContext(conf=sparkConf)
+    spark.setSystemProperty('spark.executor.memory', '8g')
+    spark.setSystemProperty('spark.driver.memory', '8g')
 
     # Parallelize the edge list, which is enough to do calculations on the graph
     E_prev: RDD = None
