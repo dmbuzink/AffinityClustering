@@ -1,4 +1,6 @@
 from typing import List, Tuple
+
+import numpy
 from networkx.classes.function import non_edges
 
 import time
@@ -13,11 +15,12 @@ from sklearn.datasets import make_circles, make_moons, make_blobs
 from matplotlib import pyplot as plt
 
 from pyspark import SparkConf, SparkContext, RDD, Broadcast, AccumulatorParam
+from pyspark.sql import SparkSession
 
 from helpers.graph import *
 
 import noisegenerator as noisegen
-from sklearn.metrics.cluster import completeness_score
+from sklearn.metrics.cluster import completeness_score, v_measure_score
 
 # Store the SparkContext as a global variable
 spark: SparkContext = None
@@ -74,7 +77,7 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
 
     # General settings
     n_samples: int = 10000
-    n_noise_samples: int = int(n_samples * 0.05 )
+    n_noise_samples: int = int(n_samples * 0.02 )
 
     # Blobs settings
     n_classes = 3
@@ -87,6 +90,7 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
     blobs_gaussian = noisegen.add_gaussian_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes)
     datasets.append((blobs_gaussian[0], blobs_gaussian[1], n_classes))
 
+
     # Blobs - Horizontal line noise
     blobs_horizontal_line = noisegen.add_horizontal_line_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes)
     datasets.append((blobs_horizontal_line[0], blobs_horizontal_line[1], n_classes))
@@ -94,9 +98,8 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
     # Blobs - Circle noise
     blobs_circle = noisegen.add_circle_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes, radius=5)
     datasets.append((blobs_circle[0], blobs_circle[1], n_classes))
-
     
-
+    # return datasets
 
     # Two moons settings
     n_classes = 2
@@ -228,8 +231,6 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]], i
     # Initialize spark context
     sparkConf = SparkConf().setAppName('AffinityClustering')
     spark = SparkContext(conf=sparkConf)
-    spark.setSystemProperty('spark.executor.memory', '8g')
-    spark.setSystemProperty('spark.driver.memory', '8g')
 
     # Parallelize the edge list, which is enough to do calculations on the graph
     E_prev: RDD = None
@@ -239,11 +240,14 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]], i
     # Initially, each vertex belongs to its own cluster
     overall_leaders.append({v.index: v.index for v in G.V})
     num_leaders = len(G.V)
+    prev_num_leaders = numpy.inf
 
     number_of_iterations = 0
 
-    while num_leaders > k:
+    while num_leaders > k and num_leaders < prev_num_leaders:
         number_of_iterations += 1
+        print("iteration: " + str(number_of_iterations))
+        print("leaders: " + str(num_leaders))
 
         # Compute best neighbours for each vertex
         neighbours = find_best_neighbours(E)
@@ -255,6 +259,7 @@ def perform_clustering(G: Graph, k: int) -> Tuple[Graph, List[Dict[int, int]], i
 
         # Add leader mapping to list
         overall_leaders.append(leaders)
+        prev_num_leaders = num_leaders
         num_leaders = len(set(leaders.values()))
 
         # We've gone too far, we need to "go back" to the previous step
@@ -436,16 +441,25 @@ def get_cluster_class(G: Graph, overall_leaders: List[Dict[int, int]]) -> np.nda
     
     return np.array(list(map(lambda n: leader_to_class[n], classes)))
 
-
-def get_cluster_completeness_score(groundtruth_clustering: List[int], result_clustering: List[int], noise_cluster_index: int):
+def get_cluster_results_without_noise(groundtruth_clustering: List[int], result_clustering: List[int], noise_cluster_index: int) -> Tuple[List[int], List[int]]:
     groundtruth_clustering_no_noise = []
     result_clustering_no_noise = []
     for i in range(len(groundtruth_clustering)):
         if groundtruth_clustering[i] != noise_cluster_index:
             groundtruth_clustering_no_noise.append(groundtruth_clustering[i])
             result_clustering_no_noise.append(result_clustering[i])
+    
+    return (groundtruth_clustering_no_noise, result_clustering_no_noise)
 
+
+def get_cluster_completeness_score(groundtruth_clustering: List[int], result_clustering: List[int], noise_cluster_index: int):
+    groundtruth_clustering_no_noise, result_clustering_no_noise = get_cluster_results_without_noise(groundtruth_clustering, result_clustering, noise_cluster_index)   
     return completeness_score(groundtruth_clustering_no_noise, result_clustering_no_noise)
+
+
+def get_cluster_v_score(groundtruth_clustering: List[int], result_clustering: List[int], noise_cluster_index: int):
+    groundtruth_clustering_no_noise, result_clustering_no_noise = get_cluster_results_without_noise(groundtruth_clustering, result_clustering, noise_cluster_index)
+    return v_measure_score(groundtruth_clustering_no_noise, result_clustering_no_noise)
 
     
 def main() -> None:
@@ -457,7 +471,7 @@ def main() -> None:
     dataset_count = 0
     for (data_X, data_y, n_classes) in datasets:
 
-        G = Graph.create_from_points((data_X, data_y), threshold=10)
+        G = Graph.create_from_points((data_X, data_y), threshold=5)
 
         # Record start time
         start_time = time.time()
@@ -467,9 +481,10 @@ def main() -> None:
         
         # Record end time
         end_time = time.time()
-        completeness_score = get_cluster_completeness_score(data_y, result_y, max(data_y))
+        # completeness_score = get_cluster_completeness_score(data_y, result_y, max(data_y))
+        v_score = get_cluster_v_score(data_y, result_y, max(data_y))
 
-        performance_results.append((start_time, end_time, number_of_iterations, completeness_score))
+        performance_results.append((start_time, end_time, number_of_iterations, v_score))
 
         fig, (ax_data, ax_result) = plt.subplots(nrows=2, ncols=1)
         fig.suptitle(f"Dataset {dataset_count}", fontsize=16, )
