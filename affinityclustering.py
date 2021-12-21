@@ -497,7 +497,7 @@ def main() -> None:
         dataset_count += 1
 
     for i in range(len(performance_results)):
-        print(f"Elapsed time for dataset {i}: {performance_results[i]} : {performance_results[i][1] - performance_results[i][0]} | number of iterations: {performance_results[i][2]} | completeness score: {performance_results[i][3]}")
+        print(f"Elapsed time for dataset {i}: {performance_results[i]} : {performance_results[i][1] - performance_results[i][0]} | number of iterations: {performance_results[i][2]} | v score: {performance_results[i][3]}")
 
     plt.show()
 
