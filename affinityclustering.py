@@ -79,45 +79,43 @@ def create_datasets() -> List[Tuple[np.ndarray, np.ndarray, int]]:
     n_samples: int = 10000
     n_noise_samples: int = int(n_samples * 0.02 )
 
-    # Blobs settings
+    # # Blobs settings
     n_classes = 3
-
+    
     # Blobs - No noise
     bobs_plain: Tuple[np.ndarray, np.ndarray] = make_blobs(n_samples=n_samples, random_state=8, centers=n_classes)
     datasets.append((bobs_plain[0], bobs_plain[1], n_classes))
-
+    
     # Blobs - Gaussian noise
     blobs_gaussian = noisegen.add_gaussian_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes)
     datasets.append((blobs_gaussian[0], blobs_gaussian[1], n_classes))
-
-
+    
+    
     # Blobs - Horizontal line noise
     blobs_horizontal_line = noisegen.add_horizontal_line_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes)
     datasets.append((blobs_horizontal_line[0], blobs_horizontal_line[1], n_classes))
-
+    
     # Blobs - Circle noise
     blobs_circle = noisegen.add_circle_noise(copy_dataset(bobs_plain), n_samples=n_noise_samples, n_classes=n_classes, radius=5)
     datasets.append((blobs_circle[0], blobs_circle[1], n_classes))
-    
-    # return datasets
 
     # Two moons settings
     n_classes = 2
-
+    
     # Two moons - No noise
     tm_plain = make_moons(n_samples=n_samples, random_state=8)
     datasets.append((tm_plain[0], tm_plain[1], n_classes))
-
+    
     # Two moons - Gaussian noise
-    tm_gaussian = noisegen.add_gaussian_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    tm_gaussian = noisegen.add_gaussian_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes, x_range=(-1, 2), y_range=(-0.5, 1))
     datasets.append((tm_gaussian[0], tm_gaussian[1], n_classes))
-
+    
     # Two moons - Horizontal line noise
-    tm_horizontal_line = noisegen.add_horizontal_line_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes)
+    tm_horizontal_line = noisegen.add_horizontal_line_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes, x_range=(-1.2, 2.2))
     datasets.append((tm_horizontal_line[0], tm_horizontal_line[1], n_classes))
-
+    
     # Two moons - Circle noise
-    tm_circle = noisegen.add_circle_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes, radius=0.7)
+    tm_circle = noisegen.add_circle_noise(copy_dataset(tm_plain), n_samples=n_noise_samples, n_classes=n_classes, radius=1.2)
     datasets.append((tm_circle[0], tm_circle[1], n_classes))
 
 
@@ -471,7 +469,7 @@ def main() -> None:
     dataset_count = 0
     for (data_X, data_y, n_classes) in datasets:
 
-        G = Graph.create_from_points((data_X, data_y), threshold=5)
+        G = Graph.create_from_points((data_X, data_y), threshold=0.8)
 
         # Record start time
         start_time = time.time()
@@ -482,7 +480,10 @@ def main() -> None:
         # Record end time
         end_time = time.time()
         # completeness_score = get_cluster_completeness_score(data_y, result_y, max(data_y))
-        v_score = get_cluster_v_score(data_y, result_y, max(data_y))
+        if len(performance_results) == 0:
+            v_score = get_cluster_v_score(data_y, result_y, 5000)
+        else:
+            v_score = get_cluster_v_score(data_y, result_y, max(data_y))
 
         performance_results.append((start_time, end_time, number_of_iterations, v_score))
 

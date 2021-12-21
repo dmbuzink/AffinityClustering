@@ -1,0 +1,10 @@
+No noise: Elapsed time for dataset 0: (1640083038.689047, 1640084060.8800123, 11, 1.0) : 1022.1909651756287 | number of iterations: 11 | v score: 1.0
+Gaussian noise: Elapsed time for dataset 1: (1640084136.2166271, 1640085179.4737868, 11, 0.9991706101907804) : 1043.2571597099304 | number of iterations: 11 | v score: 0.9991706101907804
+Horizontal line noise: Elapsed time for dataset 2: (1640085254.9605372, 1640086285.2718549, 11, 1.0) : 1030.3113176822662 | number of iterations: 11 | v score: 1.0
+Circle noise: Elapsed time for dataset 3: (1640086361.4887316, 1640087389.8151278, 11, 1.0) : 1028.326396226883 | number of iterations: 11 | v score: 1.0
+
+Elapsed time for dataset 0: (1640083038.689047, 1640084060.8800123, 11, 1.0) : 1022.1909651756287 | number of iterations: 11 | v score: 1.0
+Elapsed time for dataset 1: (1640084136.2166271, 1640085179.4737868, 11, 0.9991706101907804) : 1043.2571597099304 | number of iterations: 11 | v score: 0.9991706101907804
+Elapsed time for dataset 2: (1640085254.9605372, 1640086285.2718549, 11, 1.0) : 1030.3113176822662 | number of iterations: 11 | v score: 1.0
+Elapsed time for dataset 3: (1640086361.4887316, 1640087389.8151278, 11, 1.0) : 1028.326396226883 | number of iterations: 11 | v score: 1.0
+

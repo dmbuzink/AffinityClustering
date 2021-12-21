@@ -1,0 +1,4 @@
+Elapsed time for dataset 0: (1640098776.5215511, 1640099689.0309272, 13, 1.0) : 912.5093760490417 | number of iterations: 13 | v score: 1.0
+Elapsed time for dataset 1: (1640099747.4409146, 1640100690.7436786, 13, 1.0) : 943.3027639389038 | number of iterations: 13 | v score: 1.0
+Elapsed time for dataset 2: (1640100748.5016851, 1640101696.52569, 13, 1.0) : 948.0240049362183 | number of iterations: 13 | v score: 1.0
+Elapsed time for dataset 3: (1640101755.58766, 1640102710.035887, 13, 1.0) : 954.4482269287109 | number of iterations: 13 | v score: 1.0
